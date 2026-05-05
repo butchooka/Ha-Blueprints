@@ -73,4 +73,3 @@ action:
             below: !input power_threshold
           - service: homeassistant.turn_off
             target: !input targets_on
-``
