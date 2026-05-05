@@ -1,5 +1,5 @@
 blueprint:
-  name: TV erkennt Leistung und schaltet Zusatzgeräte
+  name: TV Master / Slave Switches
   description: >
     Schaltet Geräte ein, wenn der Stromverbrauch eines Sensors
     über einen Schwellwert steigt und schaltet sie nach einer
@@ -36,8 +36,7 @@ blueprint:
     off_delay:
       name: Ausschaltverzögerung
       description: Zeit, die gewartet wird, bevor Geräte wieder ausgeschaltet werden
-      default:
-        minutes: 10
+      default: 10
       selector:
         number:
           min: 5
