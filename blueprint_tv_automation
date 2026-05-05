@@ -1,0 +1,76 @@
+blueprint:
+  name: TV erkennt Leistung und schaltet Zusatzgeräte
+  description: >
+    Schaltet Geräte ein, wenn der Stromverbrauch eines Sensors
+    über einen Schwellwert steigt und schaltet sie nach einer
+    Verzögerung wieder aus, wenn der Verbrauch sinkt.
+  domain: automation
+
+  input:
+    power_sensor:
+      name: Leistungssensor
+      description: Strom- oder Leistungssensor des TVs (in Watt)
+      selector:
+        entity:
+          domain: sensor
+
+    power_threshold:
+      name: Leistungsschwellwert (Watt)
+      description: Ab welcher Leistung gilt der TV als eingeschaltet
+      default: 20
+      selector:
+        number:
+          min: 5
+          max: 100
+          unit_of_measurement: W
+          mode: slider
+
+    targets_on:
+      name: Geräte einschalten
+      description: Steckdosen oder Schalter, die bei TV-An eingeschaltet werden
+      selector:
+        target:
+          entity:
+            domain: switch
+
+    off_delay:
+      name: Ausschaltverzögerung
+      description: Zeit, die gewartet wird, bevor Geräte wieder ausgeschaltet werden
+      default:
+        minutes: 10
+      selector:
+        duration
+
+mode: single
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input power_sensor
+    above: !input power_threshold
+    id: power_high
+
+  - platform: numeric_state
+    entity_id: !input power_sensor
+    below: !input power_threshold
+    id: power_low
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: power_high
+        sequence:
+          - service: homeassistant.turn_on
+            target: !input targets_on
+
+      - conditions:
+          - condition: trigger
+            id: power_low
+        sequence:
+          - delay: !input off_delay
+          - condition: numeric_state
+            entity_id: !input power_sensor
+            below: !input power_threshold
+          - service: homeassistant.turn_off
+            target: !input targets_on
+``
