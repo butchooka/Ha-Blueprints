@@ -39,7 +39,11 @@ blueprint:
       default:
         minutes: 10
       selector:
-        duration
+        number:
+          min: 5
+          max: 60
+          unit_of_measurement: Min
+          mode: slider
 
 mode: single
 
