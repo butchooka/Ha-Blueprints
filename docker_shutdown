@@ -1,0 +1,105 @@
+blueprint:
+  name: Schalter per Label morgens ein / abends aus (mit Workday & Verzögerung)
+  description: >
+    Aktiviert morgens alle Schalter mit bestimmtem Label und deaktiviert sie abends.
+    Unterschiedliche Zeiten für Wochentage und Wochenende.
+    Abendliches Ausschalten wird um 30 Minuten verzögert, wenn Verbrauch hoch ist
+    oder bestimmte Lampen noch an sind.
+  domain: automation
+  input:
+    label_entities:
+      name: Geräte mit Label
+      description: Alle Schalter/Lampen, die gesteuert werden sollen
+      selector:
+        entity:
+          multiple: true
+          domain: switch
+
+    morning_time_weekday:
+      name: Einschaltzeit Wochentage
+      selector:
+        time:
+
+    morning_time_weekend:
+      name: Einschaltzeit Wochenende
+      selector:
+        time:
+
+    evening_time_weekday:
+      name: Ausschaltzeit Wochentage
+      selector:
+        time:
+
+    evening_time_weekend:
+      name: Ausschaltzeit Wochenende
+      selector:
+        time:
+
+    workday_sensor:
+      name: Workday Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+
+    power_sensor:
+      name: Verbrauchssensor (optional)
+      default: ""
+      selector:
+        entity:
+          domain: sensor
+
+    power_threshold:
+      name: Verbrauchsschwelle
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 5000
+          unit_of_measurement: W
+
+    lamps_to_check:
+      name: Lampen, die noch an sein könnten
+      selector:
+        entity:
+          multiple: true
+          domain: light
+
+mode: restart
+
+trigger:
+  - platform: time
+    at: !input morning_time_weekday
+    id: morning_weekday
+  - platform: time
+    at: !input morning_time_weekend
+    id: morning_weekend
+  - platform: time
+    at: !input evening_time_weekday
+    id: evening_weekday
+  - platform: time
+    at: !input evening_time_weekend
+    id: evening_weekend
+
+condition: []
+
+action:
+  - choose:
+
+      # --- MORGENS EINSCHALTEN ---
+      - conditions:
+          - condition: trigger
+            id: morning_weekday
+          - condition: state
+            entity_id: !input workday_sensor
+            state: "on"
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: !input label_entities
+
+      - conditions:
+          - condition: trigger
+            id: morning_weekend
+          - condition: state
+            entity_id: !input workday_sensor
+            state
