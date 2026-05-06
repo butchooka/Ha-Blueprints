@@ -1,4 +1,426 @@
 blueprint:
+  name: Schalter per Label morgens ein / abends aus (mit Workday, Delay-Loop & Label-Filtern)
+  description: >
+    Steuerung von Geräten anhand ihrer Labels. Unterstützt:
+    - Hauptlabel (ein & aus)
+    - Label nur für Einschalten
+    - Label nur für Ausschalten
+    - Workday-Zeiten
+    - Wiederholte Verzögerung bei Verbrauch/Licht
+  domain: automation
+
+  input:
+    label_main:
+      name: Haupt-Label (ein & aus)
+      selector:
+        text:
+
+    label_only_on:
+      name: Label für Geräte, die nur eingeschaltet werden
+      default: ""
+      selector:
+        text:
+
+    label_only_off:
+      name: Label für Geräte, die nur ausgeschaltet werden
+      default: ""
+      selector:
+        text:
+
+    morning_time_weekday:
+      name: Einschaltzeit Wochentage
+      selector:
+        time:
+
+    morning_time_weekend:
+      name: Einschaltzeit Wochenende
+      selector:
+        time:
+
+    evening_time_weekday:
+      name: Ausschaltzeit Wochentage
+      selector:
+        time:
+
+    evening_time_weekend:
+      name: Ausschaltzeit Wochenende
+      selector:
+        time:
+
+    workday_sensor:
+      name: Workday Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+
+    power_sensor:
+      name: Verbrauchssensor (optional)
+      default: ""
+      selector:
+        entity:
+          domain: sensor
+
+    power_threshold:
+      name: Verbrauchsschwelle
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 5000
+          unit_of_measurement: W
+
+    lamps_to_check:
+      name: Lampen, die noch an sein könnten
+      selector:
+        entity:
+          multiple: true
+          domain: light
+
+    delay_minutes:
+      name: Verzögerungsdauer (Minuten)
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 120
+          unit_of_measurement: min
+
+mode: restart
+
+variables:
+  main_label: !input label_main
+  only_on_label: !input label_only_on
+  only_off_label: !input label_only_off
+
+  main_entities: >
+    {{ expand(states.switch)
+       | selectattr('device_id','!=',None)
+       | selectattr('device_id','in',
+            device_entities | selectattr('labels','search', main_label) | map(attribute='id') | list
+         )
+       | map(attribute='entity_id')
+       | list }}
+
+  only_on_entities: >
+    {{ expand(states.switch)
+       | selectattr('device_id','!=',None)
+       | selectattr('device_id','in',
+            device_entities | selectattr('labels','search', only_on_label) | map(attribute='id') | list
+         )
+       | map(attribute='entity_id')
+       | list }}
+
+  only_off_entities: >
+    {{ expand(states.switch)
+       | selectattr('device_id','!=',None)
+       | selectattr('device_id','in',
+            device_entities | selectattr('labels','search', only_off_label) | map(attribute='id') | list
+         )
+       | map(attribute='entity_id')
+       | list }}
+
+trigger:
+  - platform: time
+    at: !input morning_time_weekday
+    id: morning_weekday
+  - platform: time
+    at: !input morning_time_weekend
+    id: morning_weekend
+  - platform: time
+    at: !input evening_time_weekday
+    id: evening_weekday
+  - platform: time
+    at: !input evening_time_weekend
+    id: evening_weekend
+
+action:
+  - choose:
+
+      # --- MORGENS ---
+      - conditions:
+          - condition: trigger
+            id: morning_weekday
+          - condition: state
+            entity_id: !input workday_sensor
+            state: "on"
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: "{{ main_entities + only_on_entities }}"
+
+      - conditions:
+          - condition: trigger
+            id: morning_weekend
+          - condition: state
+            entity_id: !input workday_sensor
+            state: "off"
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: "{{ main_entities + only_on_entities }}"
+
+      # --- ABENDS ---
+      - conditions:
+          - condition: trigger
+            id: evening_weekday
+          - condition: state
+            entity_id: !input workday_sensor
+            state: "on"
+        sequence:
+          - repeat:
+              while:
+                - condition: or
+                  conditions:
+                    - condition: numeric_state
+                      entity_id: !input power_sensorblueprint:
+  name: Schalter per Label morgens ein / abends aus (mit Workday, Delay-Loop & Label-Filtern)
+  description: >
+    Steuerung von Geräten anhand ihrer Labels. Unterstützt:
+    - Hauptlabel (ein & aus)
+    - Label nur für Einschalten
+    - Label nur für Ausschalten
+    - Workday-Zeiten
+    - Wiederholte Verzögerung bei Verbrauch/Licht
+  domain: automation
+
+  input:
+    label_main:
+      name: Haupt-Label (ein & aus)
+      selector:
+        text:
+
+    label_only_on:
+      name: Label für Geräte, die nur eingeschaltet werden
+      default: ""
+      selector:
+        text:
+
+    label_only_off:
+      name: Label für Geräte, die nur ausgeschaltet werden
+      default: ""
+      selector:
+        text:
+
+    morning_time_weekday:
+      name: Einschaltzeit Wochentage
+      selector:
+        time:
+
+    morning_time_weekend:
+      name: Einschaltzeit Wochenende
+      selector:
+        time:
+
+    evening_time_weekday:
+      name: Ausschaltzeit Wochentage
+      selector:
+        time:
+
+    evening_time_weekend:
+      name: Ausschaltzeit Wochenende
+      selector:
+        time:
+
+    workday_sensor:
+      name: Workday Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+
+    power_sensor:
+      name: Verbrauchssensor (optional)
+      default: ""
+      selector:
+        entity:
+          domain: sensor
+
+    power_threshold:
+      name: Verbrauchsschwelle
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 5000
+          unit_of_measurement: W
+
+    lamps_to_check:
+      name: Lampen, die noch an sein könnten
+      selector:
+        entity:
+          multiple: true
+          domain: light
+
+    delay_minutes:
+      name: Verzögerungsdauer (Minuten)
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 120
+          unit_of_measurement: min
+
+mode: restart
+
+variables:
+  main_label: !input label_main
+  only_on_label: !input label_only_on
+  only_off_label: !input label_only_off
+
+  main_entities: >
+    {{ expand(states.switch)
+       | selectattr('device_id','!=',None)
+       | selectattr('device_id','in',
+            device_entities | selectattr('labels','search', main_label) | map(attribute='id') | list
+         )
+       | map(attribute='entity_id')
+       | list }}
+
+  only_on_entities: >
+    {{ expand(states.switch)
+       | selectattr('device_id','!=',None)
+       | selectattr('device_id','in',
+            device_entities | selectattr('labels','search', only_on_label) | map(attribute='id') | list
+         )
+       | map(attribute='entity_id')
+       | list }}
+
+  only_off_entities: >
+    {{ expand(states.switch)
+       | selectattr('device_id','!=',None)
+       | selectattr('device_id','in',
+            device_entities | selectattr('labels','search', only_off_label) | map(attribute='id') | list
+         )
+       | map(attribute='entity_id')
+       | list }}
+
+trigger:
+  - platform: time
+    at: !input morning_time_weekday
+    id: morning_weekday
+  - platform: time
+    at: !input morning_time_weekend
+    id: morning_weekend
+  - platform: time
+    at: !input evening_time_weekday
+    id: evening_weekday
+  - platform: time
+    at: !input evening_time_weekend
+    id: evening_weekend
+
+action:
+  - choose:
+
+      # --- MORGENS ---
+      - conditions:
+          - condition: trigger
+            id: morning_weekday
+          - condition: state
+            entity_id: !input workday_sensor
+            state: "on"
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: "{{ main_entities + only_on_entities }}"
+
+      - conditions:
+          - condition: trigger
+            id: morning_weekend
+          - condition: state
+            entity_id: !input workday_sensor
+            state: "off"
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: "{{ main_entities + only_on_entities }}"
+
+      # --- ABENDS ---
+      - conditions:
+          - condition: trigger
+            id: evening_weekday
+          - condition: state
+            entity_id: !input workday_sensor
+            state: "on"
+        sequence:
+          - repeat:
+              while:
+                - condition: or
+                  conditions:
+                    - condition: numeric_state
+                      entity_id: !input power_sensor
+                      above: !input power_threshold
+                    - condition: state
+                      entity_id: !input lamps_to_check
+                      state: "on"
+              sequence:
+                - delay:
+                    minutes: !input delay_minutes
+
+          - service: switch.turn_off
+            target:
+              entity_id: "{{ main_entities + only_off_entities }}"
+
+      - conditions:
+          - condition: trigger
+            id: evening_weekend
+          - condition: state
+            entity_id: !input workday_sensor
+            state: "off"
+        sequence:
+          - repeat:
+              while:
+                - condition: or
+                  conditions:
+                    - condition: numeric_state
+                      entity_id: !input power_sensor
+                      above: !input power_threshold
+                    - condition: state
+                      entity_id: !input lamps_to_check
+                      state: "on"
+              sequence:
+                - delay:
+                    minutes: !input delay_minutes
+
+          - service: switch.turn_off
+            target:
+              entity_id: "{{ main_entities + only_off_entities }}"
+
+                      above: !input power_threshold
+                    - condition: state
+                      entity_id: !input lamps_to_check
+                      state: "on"
+              sequence:
+                - delay:
+                    minutes: !input delay_minutes
+
+          - service: switch.turn_off
+            target:
+              entity_id: "{{ main_entities + only_off_entities }}"
+
+      - conditions:
+          - condition: trigger
+            id: evening_weekend
+          - condition: state
+            entity_id: !input workday_sensor
+            state: "off"
+        sequence:
+          - repeat:
+              while:
+                - condition: or
+                  conditions:
+                    - condition: numeric_state
+                      entity_id: !input power_sensor
+                      above: !input power_threshold
+                    - condition: state
+                      entity_id: !input lamps_to_check
+                      state: "on"
+              sequence:
+                - delay:
+                    minutes: !input delay_minutes
+
+          - service: switch.turn_off
+            target:
+              entity_id: "{{ main_entities + only_off_entities }}"
+blueprint:
   name: Schalter per Label morgens ein / abends aus (mit Workday, Delay-Loop & Zusatzlabels)
   description: >
     Aktiviert morgens Geräte basierend auf Labels und schaltet sie abends aus.
