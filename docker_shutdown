@@ -1,13 +1,5 @@
 blueprint:
-  name: Geräte per Target morgens ein / abends aus (stabil, Workday, Delay-Loop)
-  description: >
-    Steuerung von Geräten anhand eines Target-Selectors (Entity, Device, Area, Label).
-    Unterstützt:
-    - Hauptgruppe (ein & aus)
-    - Nur-Einschalten-Gruppe
-    - Nur-Ausschalten-Gruppe
-    - Workday-Zeiten
-    - Wiederholte Verzögerung bei Verbrauch/Licht
+  name: Geräte morgens ein / abends aus (robust)
   domain: automation
 
   input:
@@ -17,97 +9,79 @@ blueprint:
         target: {}
 
     target_only_on:
-      name: Ziel nur für Einschalten
+      name: Nur Einschalten
       default: {}
       selector:
         target: {}
 
     target_only_off:
-      name: Ziel nur für Ausschalten
+      name: Nur Ausschalten
       default: {}
       selector:
         target: {}
 
     morning_time_weekday:
-      name: Einschaltzeit Wochentage
       selector:
         time:
 
     morning_time_weekend:
-      name: Einschaltzeit Wochenende
       selector:
         time:
 
     evening_time_weekday:
-      name: Ausschaltzeit Wochentage
       selector:
         time:
 
     evening_time_weekend:
-      name: Ausschaltzeit Wochenende
       selector:
         time:
 
     workday_sensor:
-      name: Workday Sensor
       selector:
         entity:
           domain: binary_sensor
 
     power_sensor:
-      name: Verbrauchssensor (optional)
       default: ""
       selector:
         entity:
           domain: sensor
 
     power_threshold:
-      name: Verbrauchsschwelle
       default: 0
       selector:
         number:
           min: 0
           max: 5000
-          unit_of_measurement: W
 
     lamps_to_check:
-      name: Lampen, die noch an sein könnten
       selector:
         entity:
-          multiple: true
           domain: light
+          multiple: true
 
     delay_minutes:
-      name: Verzögerungsdauer (Minuten)
       default: 30
       selector:
         number:
           min: 1
           max: 120
-          unit_of_measurement: min
 
 mode: restart
-
-variables:
-  main_entities: >
-    {{ i.target_main.entity_id | default([], true) }}
-
-  only_on_entities: >
-    {{ i.target_only_on.entity_id | default([], true) }}
-
-  only_off_entities: >
-    {{ i.target_only_off.entity_id | default([], true) }}
 
 trigger:
   - platform: time
     at: !input morning_time_weekday
     id: morning_weekday
+
   - platform: time
     at: !input morning_time_weekend
     id: morning_weekend
+
   - platform: time
     at: !input evening_time_weekday
     id: evening_weekday
+
   - platform: time
     at: !input evening_time_weekend
     id: evening_weekend
@@ -115,7 +89,7 @@ trigger:
 action:
   - choose:
 
-      # --- MORGENS ---
+      # MORGEN WERKTAG
       - conditions:
           - condition: trigger
             id: morning_weekday
@@ -124,9 +98,12 @@ action:
             state: "on"
         sequence:
           - service: homeassistant.turn_on
-            target:
-              entity_id: "{{ main_entities + only_on_entities }}"
+            target: !input target_main
 
+          - service: homeassistant.turn_on
+            target: !input target_only_on
+
+      # MORGEN WOCHENENDE
       - conditions:
           - condition: trigger
             id: morning_weekend
@@ -135,10 +112,12 @@ action:
             state: "off"
         sequence:
           - service: homeassistant.turn_on
-            target:
-              entity_id: "{{ main_entities + only_on_entities }}"
+            target: !input target_main
 
-      # --- ABENDS ---
+          - service: homeassistant.turn_on
+            target: !input target_only_on
+
+      # ABEND WERKTAG
       - conditions:
           - condition: trigger
             id: evening_weekday
@@ -152,10 +131,11 @@ action:
                   conditions:
                     - condition: template
                       value_template: >
-                        {% if i.power_sensor != "" %}
-                        {{ states(i.power_sensor) | float(0) > i.power_threshold }}
+                        {% set sensor = !input power_sensor %}
+                        {% if sensor != "" %}
+                          {{ states(sensor) | float(0) > (!input power_threshold) }}
                         {% else %}
-                        false
+                          false
                         {% endif %}
                     - condition: state
                       entity_id: !input lamps_to_check
@@ -165,9 +145,12 @@ action:
                     minutes: !input delay_minutes
 
           - service: homeassistant.turn_off
-            target:
-              entity_id: "{{ main_entities + only_off_entities }}"
+            target: !input target_main
 
+          - service: homeassistant.turn_off
+            target: !input target_only_off
+
+      # ABEND WOCHENENDE
       - conditions:
           - condition: trigger
             id: evening_weekend
@@ -181,10 +164,11 @@ action:
                   conditions:
                     - condition: template
                       value_template: >
-                        {% if i.power_sensor != "" %}
-                        {{ states(i.power_sensor) | float(0) > i.power_threshold }}
+                        {% set sensor = !input power_sensor %}
+                        {% if sensor != "" %}
+                          {{ states(sensor) | float(0) > (!input power_threshold) }}
                         {% else %}
-                        false
+                          false
                         {% endif %}
                     - condition: state
                       entity_id: !input lamps_to_check
@@ -194,5 +178,7 @@ action:
                     minutes: !input delay_minutes
 
           - service: homeassistant.turn_off
-            target:
-              entity_id: "{{ main_entities + only_off_entities }}"
+            target: !input target_main
+
+          - service: homeassistant.turn_off
+            target: !input target_only_off
