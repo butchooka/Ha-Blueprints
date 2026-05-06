@@ -1,35 +1,32 @@
 blueprint:
-  name: Schalter per Label morgens ein / abends aus (mit Workday, Delay-Loop & Zusatzlabels)
+  name: Geräte per Target morgens ein / abends aus (Workday, Delay-Loop, 3 Gruppen)
   description: >
-    Aktiviert morgens Geräte basierend auf Labels und schaltet sie abends aus.
-    Unterschiedliche Zeiten für Wochentage und Wochenende.
-    Abendliches Ausschalten wird verzögert, wenn Verbrauch hoch ist oder Lampen an sind.
-    Verzögerung wird wiederholt geprüft. Zusätzlich: Geräte, die nur ein- oder nur ausgeschaltet werden.
+    Steuerung von Geräten anhand eines Target-Selectors (Entity, Device, Area, Label).
+    Unterstützt:
+    - Hauptgruppe (ein & aus)
+    - Nur-Einschalten-Gruppe
+    - Nur-Ausschalten-Gruppe
+    - Workday-Zeiten
+    - Wiederholte Verzögerung bei Verbrauch/Licht
   domain: automation
 
   input:
-    label_entities:
-      name: Hauptgeräte (ein & aus)
+    target_main:
+      name: Haupt-Ziel (ein & aus)
       selector:
-        entity:
-          multiple: true
-          domain: switch
+        target: {}
 
-    label_entities_only_on:
-      name: Geräte nur einschalten
-      default: []
+    target_only_on:
+      name: Ziel nur für Einschalten
+      default: {}
       selector:
-        entity:
-          multiple: true
-          domain: switch
+        target: {}
 
-    label_entities_only_off:
-      name: Geräte nur ausschalten
-      default: []
+    target_only_off:
+      name: Ziel nur für Ausschalten
+      default: {}
       selector:
-        entity:
-          multiple: true
-          domain: switch
+        target: {}
 
     morning_time_weekday:
       name: Einschaltzeit Wochentage
@@ -91,6 +88,50 @@ blueprint:
 
 mode: restart
 
+# --- TARGET EXPANSION ---
+variables:
+  expanded_main: >
+    {%- set ns = namespace(ret=[]) %}
+    {%- set t = i.target_main %}
+    {%- for key in ['device', 'area', 'entity', 'label'] %}
+      {%- set items = t.get(key ~ '_id', []) %}
+      {%- if items %}
+        {%- set items = [ items ] if items is string else items %}
+        {%- set items = items if key == 'entity'
+            else items | map(key ~ '_entities') | sum(start=[]) %}
+        {%- set ns.ret = ns.ret + [ items ] %}
+      {%- endif %}
+    {%- endfor %}
+    {{ ns.ret | sum(start=[]) }}
+
+  expanded_only_on: >
+    {%- set ns = namespace(ret=[]) %}
+    {%- set t = i.target_only_on %}
+    {%- for key in ['device', 'area', 'entity', 'label'] %}
+      {%- set items = t.get(key ~ '_id', []) %}
+      {%- if items %}
+        {%- set items = [ items ] if items is string else items %}
+        {%- set items = items if key == 'entity'
+            else items | map(key ~ '_entities') | sum(start=[]) %}
+        {%- set ns.ret = ns.ret + [ items ] %}
+      {%- endif %}
+    {%- endfor %}
+    {{ ns.ret | sum(start=[]) }}
+
+  expanded_only_off: >
+    {%- set ns = namespace(ret=[]) %}
+    {%- set t = i.target_only_off %}
+    {%- for key in ['device', 'area', 'entity', 'label'] %}
+      {%- set items = t.get(key ~ '_id', []) %}
+      {%- if items %}
+        {%- set items = [ items ] if items is string else items %}
+        {%- set items = items if key == 'entity'
+            else items | map(key ~ '_entities') | sum(start=[]) %}
+        {%- set ns.ret = ns.ret + [ items ] %}
+      {%- endif %}
+    {%- endfor %}
+    {{ ns.ret | sum(start=[]) }}
+
 trigger:
   - platform: time
     at: !input morning_time_weekday
@@ -105,8 +146,6 @@ trigger:
     at: !input evening_time_weekend
     id: evening_weekend
 
-condition: []
-
 action:
   - choose:
 
@@ -120,9 +159,7 @@ action:
         sequence:
           - service: switch.turn_on
             target:
-              entity_id:
-                - !input label_entities
-                - !input label_entities_only_on
+              entity_id: "{{ expanded_main + expanded_only_on }}"
 
       - conditions:
           - condition: trigger
@@ -133,9 +170,7 @@ action:
         sequence:
           - service: switch.turn_on
             target:
-              entity_id:
-                - !input label_entities
-                - !input label_entities_only_on
+              entity_id: "{{ expanded_main + expanded_only_on }}"
 
       # --- ABENDS ---
       - conditions:
@@ -161,9 +196,7 @@ action:
 
           - service: switch.turn_off
             target:
-              entity_id:
-                - !input label_entities
-                - !input label_entities_only_off
+              entity_id: "{{ expanded_main + expanded_only_off }}"
 
       - conditions:
           - condition: trigger
@@ -188,6 +221,4 @@ action:
 
           - service: switch.turn_off
             target:
-              entity_id:
-                - !input label_entities
-                - !input label_entities_only_off
+              entity_id: "{{ expanded_main + expanded_only_off }}"
