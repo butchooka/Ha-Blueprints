@@ -1,5 +1,5 @@
 blueprint:
-  name: Geräte morgens ein / abends aus (robust)
+  name: Geräte morgens ein / abends aus (stabil + Abbruch nach 2 Delays)
   domain: automation
 
   input:
@@ -42,6 +42,7 @@ blueprint:
           domain: binary_sensor
 
     power_sensor:
+      name: Verbrauchssensor (optional)
       default: ""
       selector:
         entity:
@@ -55,6 +56,8 @@ blueprint:
           max: 5000
 
     lamps_to_check:
+      name: Lampen prüfen
+      default: []
       selector:
         entity:
           domain: light
@@ -69,6 +72,17 @@ blueprint:
 
 mode: restart
 
+##################################
+# VARIABLEN (Blueprint-sicher!)
+##################################
+variables:
+  power_sensor_var: !input power_sensor
+  power_threshold_var: !input power_threshold
+  lamps_var: !input lamps_to_check
+
+##################################
+# TRIGGER
+##################################
 trigger:
   - platform: time
     at: !input morning_time_weekday
@@ -86,10 +100,15 @@ trigger:
     at: !input evening_time_weekend
     id: evening_weekend
 
+##################################
+# ACTION
+##################################
 action:
   - choose:
 
-      # MORGEN WERKTAG
+      ##################################
+      # MORGEN
+      ##################################
       - conditions:
           - condition: trigger
             id: morning_weekday
@@ -99,11 +118,9 @@ action:
         sequence:
           - service: homeassistant.turn_on
             target: !input target_main
-
           - service: homeassistant.turn_on
             target: !input target_only_on
 
-      # MORGEN WOCHENENDE
       - conditions:
           - condition: trigger
             id: morning_weekend
@@ -113,70 +130,88 @@ action:
         sequence:
           - service: homeassistant.turn_on
             target: !input target_main
-
           - service: homeassistant.turn_on
             target: !input target_only_on
 
-      # ABEND WERKTAG
+      ##################################
+      # ABEND (KERNELEMENT)
+      ##################################
       - conditions:
           - condition: trigger
-            id: evening_weekday
-          - condition: state
-            entity_id: !input workday_sensor
-            state: "on"
+            id:
+              - evening_weekday
+              - evening_weekend
+          - condition: or
+            conditions:
+              - condition: and
+                conditions:
+                  - condition: trigger
+                    id: evening_weekday
+                  - condition: state
+                    entity_id: !input workday_sensor
+                    state: "on"
+              - condition: and
+                conditions:
+                  - condition: trigger
+                    id: evening_weekend
+                  - condition: state
+                    entity_id: !input workday_sensor
+                    state: "off"
+
         sequence:
+
+          ##################################
+          # REPEAT MIT ABRUCH
+          ##################################
           - repeat:
-              while:
-                - condition: or
-                  conditions:
-                    - condition: template
-                      value_template: >
-                        {% set sensor = !input power_sensor %}
-                        {% if sensor != "" %}
-                          {{ states(sensor) | float(0) > (!input power_threshold) }}
-                        {% else %}
-                          false
-                        {% endif %}
-                    - condition: state
-                      entity_id: !input lamps_to_check
-                      state: "on"
               sequence:
+
+                # 👉 ABBRUCH nach 2 Versuchen
+                - choose:
+                    - conditions:
+                        - condition: template
+                          value_template: "{{ repeat.index > 2 }}"
+                      sequence:
+                        - stop: "Abbruch: nach 2 Delays noch aktiv"
+
+                # 👉 Bedingung prüfen (VERBRAUCH oder LICHT)
+                - condition: template
+                  value_template: >
+                    {% set power_ok =
+                      (power_sensor_var != "" and
+                      states(power_sensor_var) | float(0) > power_threshold_var) %}
+
+                    {% set lights_on =
+                      lamps_var
+                      | select('is_state', 'on')
+                      | list
+                      | count > 0 %}
+
+                    {{ power_ok or lights_on }}
+
+                # 👉 warten
                 - delay:
                     minutes: !input delay_minutes
 
-          - service: homeassistant.turn_off
-            target: !input target_main
+              # 👉 solange Bedingung WAHR ist
+              until:
+                - condition: template
+                  value_template: >
+                    {% set power_ok =
+                      (power_sensor_var != "" and
+                      states(power_sensor_var) | float(0) > power_threshold_var) %}
 
-          - service: homeassistant.turn_off
-            target: !input target_only_off
+                    {% set lights_on =
+                      lamps_var
+                      | select('is_state', 'on')
+                      | list
+                      | count > 0 %}
 
-      # ABEND WOCHENENDE
-      - conditions:
-          - condition: trigger
-            id: evening_weekend
-          - condition: state
-            entity_id: !input workday_sensor
-            state: "off"
-        sequence:
-          - repeat:
-              while:
-                - condition: or
-                  conditions:
-                    - condition: template
-                      value_template: >
-                        {% set sensor = !input power_sensor %}
-                        {% if sensor != "" %}
-                          {{ states(sensor) | float(0) > (!input power_threshold) }}
-                        {% else %}
-                          false
-                        {% endif %}
-                    - condition: state
-                      entity_id: !input lamps_to_check
-                      state: "on"
-              sequence:
-                - delay:
-                    minutes: !input delay_minutes
+                    {{ not (power_ok or lights_on) }}
 
+          ##################################
+          # AUSSCHALTEN (nur wenn NICHT abgebrochen)
+          ##################################
           - service: homeassistant.turn_off
             target: !input target_main
 
