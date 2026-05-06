@@ -1,5 +1,5 @@
 blueprint:
-  name: Geräte per Target morgens ein / abends aus (Workday, Delay-Loop, 3 Gruppen)
+  name: Geräte per Target morgens ein / abends aus (stabil, Workday, Delay-Loop)
   description: >
     Steuerung von Geräten anhand eines Target-Selectors (Entity, Device, Area, Label).
     Unterstützt:
@@ -89,14 +89,14 @@ blueprint:
 mode: restart
 
 variables:
-  expanded_main: >
-    {{ expand(i.target_main.entity_id) | map(attribute='entity_id') | list }}
+  main_entities: >
+    {{ i.target_main.entity_id | default([], true) }}
 
-  expanded_only_on: >
-    {{ expand(i.target_only_on.entity_id) | map(attribute='entity_id') | list }}
+  only_on_entities: >
+    {{ i.target_only_on.entity_id | default([], true) }}
 
-  expanded_only_off: >
-    {{ expand(i.target_only_off.entity_id) | map(attribute='entity_id') | list }}
+  only_off_entities: >
+    {{ i.target_only_off.entity_id | default([], true) }}
 
 trigger:
   - platform: time
@@ -125,7 +125,7 @@ action:
         sequence:
           - service: homeassistant.turn_on
             target:
-              entity_id: "{{ expanded_main + expanded_only_on }}"
+              entity_id: "{{ main_entities + only_on_entities }}"
 
       - conditions:
           - condition: trigger
@@ -136,7 +136,7 @@ action:
         sequence:
           - service: homeassistant.turn_on
             target:
-              entity_id: "{{ expanded_main + expanded_only_on }}"
+              entity_id: "{{ main_entities + only_on_entities }}"
 
       # --- ABENDS ---
       - conditions:
@@ -166,7 +166,7 @@ action:
 
           - service: homeassistant.turn_off
             target:
-              entity_id: "{{ expanded_main + expanded_only_off }}"
+              entity_id: "{{ main_entities + only_off_entities }}"
 
       - conditions:
           - condition: trigger
@@ -195,4 +195,4 @@ action:
 
           - service: homeassistant.turn_off
             target:
-              entity_id: "{{ expanded_main + expanded_only_off }}"
+              entity_id: "{{ main_entities + only_off_entities }}"
