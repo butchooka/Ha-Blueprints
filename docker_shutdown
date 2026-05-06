@@ -8,7 +8,6 @@ blueprint:
     - Nur-Ausschalten-Gruppe
     - Workday-Zeiten
     - Wiederholte Verzögerung bei Verbrauch/Licht
-    - Optionale Benachrichtigung bei Verzögerung
   domain: automation
 
   input:
@@ -87,30 +86,17 @@ blueprint:
           max: 120
           unit_of_measurement: min
 
-    notify_entity:
-      name: Benachrichtigung (optional)
-      default: ""
-      selector:
-        entity:
-          domain: notify
-
-    notify_message:
-      name: Nachricht bei Verzögerung
-      default: "Abendliches Ausschalten wurde verzögert."
-      selector:
-        text:
-
 mode: restart
 
 variables:
   expanded_main: >
-    {{ expand(i.target_main) | map(attribute='entity_id') | list }}
+    {{ expand(i.target_main.entity_id) | map(attribute='entity_id') | list }}
 
   expanded_only_on: >
-    {{ expand(i.target_only_on) | map(attribute='entity_id') | list }}
+    {{ expand(i.target_only_on.entity_id) | map(attribute='entity_id') | list }}
 
   expanded_only_off: >
-    {{ expand(i.target_only_off) | map(attribute='entity_id') | list }}
+    {{ expand(i.target_only_off.entity_id) | map(attribute='entity_id') | list }}
 
 trigger:
   - platform: time
@@ -175,14 +161,6 @@ action:
                       entity_id: !input lamps_to_check
                       state: "on"
               sequence:
-                - choose:
-                    - conditions:
-                        - condition: template
-                          value_template: "{{ i.notify_entity != '' }}"
-                      sequence:
-                        - service: "{{ i.notify_entity }}"
-                          data:
-                            message: "{{ i.notify_message }}"
                 - delay:
                     minutes: !input delay_minutes
 
@@ -212,14 +190,6 @@ action:
                       entity_id: !input lamps_to_check
                       state: "on"
               sequence:
-                - choose:
-                    - conditions:
-                        - condition: template
-                          value_template: "{{ i.notify_entity != '' }}"
-                      sequence:
-                        - service: "{{ i.notify_entity }}"
-                          data:
-                            message: "{{ i.notify_message }}"
                 - delay:
                     minutes: !input delay_minutes
 
