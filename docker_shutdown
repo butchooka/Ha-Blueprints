@@ -1,10 +1,10 @@
 blueprint:
-  name: Geräte morgens ein / abends aus (stabil + Abbruch nach 2 Delays)
+  name: Geräte morgens ein / abends aus (check TV + Abbruch nach 2 Delays)
   domain: automation
 
   input:
     target_main:
-      name: Haupt-Ziel (ein & aus)
+      name: Ein und Ausschalten
       selector:
         target: {}
 
@@ -42,7 +42,7 @@ blueprint:
           domain: binary_sensor
 
     power_sensor:
-      name: Verbrauchssensor (optional)
+      name: Verbrauchssensor (läuft TV noch?)
       default: ""
       selector:
         entity:
