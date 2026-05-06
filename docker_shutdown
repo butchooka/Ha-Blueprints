@@ -1,32 +1,35 @@
 blueprint:
-  name: Geräte per Label morgens ein / abends aus (mit Workday, Delay-Loop & 3 Labelgruppen)
+  name: Schalter per Label morgens ein / abends aus (mit Workday, Delay-Loop & Zusatzlabels)
   description: >
-    Steuerung von Geräten anhand ihrer Labels. Unterstützt:
-    - Hauptlabel (ein & aus)
-    - Label nur für Einschalten
-    - Label nur für Ausschalten
-    - Workday-Zeiten
-    - Wiederholte Verzögerung bei Verbrauch/Licht
+    Aktiviert morgens Geräte basierend auf Labels und schaltet sie abends aus.
+    Unterschiedliche Zeiten für Wochentage und Wochenende.
+    Abendliches Ausschalten wird verzögert, wenn Verbrauch hoch ist oder Lampen an sind.
+    Verzögerung wird wiederholt geprüft. Zusätzlich: Geräte, die nur ein- oder nur ausgeschaltet werden.
   domain: automation
 
   input:
-    label_main:
-      name: Haupt-Label (ein & aus)
-      description: Name des Labels, z. B. "Container Stromsparen"
+    label_entities:
+      name: Hauptgeräte (ein & aus)
       selector:
-        text:
+        entity:
+          multiple: true
+          domain: switch
 
-    label_only_on:
-      name: Label für Geräte, die nur eingeschaltet werden
-      default: ""
+    label_entities_only_on:
+      name: Geräte nur einschalten
+      default: []
       selector:
-        text:
+        entity:
+          multiple: true
+          domain: switch
 
-    label_only_off:
-      name: Label für Geräte, die nur ausgeschaltet werden
-      default: ""
+    label_entities_only_off:
+      name: Geräte nur ausschalten
+      default: []
       selector:
-        text:
+        entity:
+          multiple: true
+          domain: switch
 
     morning_time_weekday:
       name: Einschaltzeit Wochentage
@@ -88,48 +91,6 @@ blueprint:
 
 mode: restart
 
-variables:
-  main_label: !input label_main
-  only_on_label: !input label_only_on
-  only_off_label: !input label_only_off
-
-  # Alle Geräte mit Label finden
-  main_entities: >
-    {{ expand(states.switch)
-       | selectattr('device_id','!=',None)
-       | selectattr('device_id','in',
-            device_entities
-            | selectattr('labels','search', main_label)
-            | map(attribute='id')
-            | list
-         )
-       | map(attribute='entity_id')
-       | list }}
-
-  only_on_entities: >
-    {{ expand(states.switch)
-       | selectattr('device_id','!=',None)
-       | selectattr('device_id','in',
-            device_entities
-            | selectattr('labels','search', only_on_label)
-            | map(attribute='id')
-            | list
-         )
-       | map(attribute='entity_id')
-       | list }}
-
-  only_off_entities: >
-    {{ expand(states.switch)
-       | selectattr('device_id','!=',None)
-       | selectattr('device_id','in',
-            device_entities
-            | selectattr('labels','search', only_off_label)
-            | map(attribute='id')
-            | list
-         )
-       | map(attribute='entity_id')
-       | list }}
-
 trigger:
   - platform: time
     at: !input morning_time_weekday
@@ -144,6 +105,8 @@ trigger:
     at: !input evening_time_weekend
     id: evening_weekend
 
+condition: []
+
 action:
   - choose:
 
@@ -157,7 +120,9 @@ action:
         sequence:
           - service: switch.turn_on
             target:
-              entity_id: "{{ main_entities + only_on_entities }}"
+              entity_id:
+                - !input label_entities
+                - !input label_entities_only_on
 
       - conditions:
           - condition: trigger
@@ -168,7 +133,9 @@ action:
         sequence:
           - service: switch.turn_on
             target:
-              entity_id: "{{ main_entities + only_on_entities }}"
+              entity_id:
+                - !input label_entities
+                - !input label_entities_only_on
 
       # --- ABENDS ---
       - conditions:
@@ -194,7 +161,9 @@ action:
 
           - service: switch.turn_off
             target:
-              entity_id: "{{ main_entities + only_off_entities }}"
+              entity_id:
+                - !input label_entities
+                - !input label_entities_only_off
 
       - conditions:
           - condition: trigger
@@ -219,4 +188,6 @@ action:
 
           - service: switch.turn_off
             target:
-              entity_id: "{{ main_entities + only_off_entities }}"
+              entity_id:
+                - !input label_entities
+                - !input label_entities_only_off
