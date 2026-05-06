@@ -102,4 +102,55 @@ action:
             id: morning_weekend
           - condition: state
             entity_id: !input workday_sensor
-            state
+            state: "off"
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: !input label_entities
+
+      # --- ABENDS AUSSCHALTEN ---
+      - conditions:
+          - condition: trigger
+            id: evening_weekday
+          - condition: state
+            entity_id: !input workday_sensor
+            state: "on"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: or
+                    conditions:
+                      - condition: numeric_state
+                        entity_id: !input power_sensor
+                        above: !input power_threshold
+                      - condition: state
+                        entity_id: !input lamps_to_check
+                        state: "on"
+                sequence:
+                  - delay: "00:30:00"
+          - service: switch.turn_off
+            target:
+              entity_id: !input label_entities
+
+      - conditions:
+          - condition: trigger
+            id: evening_weekend
+          - condition: state
+            entity_id: !input workday_sensor
+            state: "off"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: or
+                    conditions:
+                      - condition: numeric_state
+                        entity_id: !input power_sensor
+                        above: !input power_threshold
+                      - condition: state
+                        entity_id: !input lamps_to_check
+                        state: "on"
+                sequence:
+                  - delay: "00:30:00"
+          - service: switch.turn_off
+            target:
+              entity_id: !input label_entities
