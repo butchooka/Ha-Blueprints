@@ -8,6 +8,7 @@ blueprint:
     - Nur-Ausschalten-Gruppe
     - Workday-Zeiten
     - Wiederholte Verzögerung bei Verbrauch/Licht
+    - Optionale Benachrichtigung bei Verzögerung
   domain: automation
 
   input:
@@ -86,41 +87,30 @@ blueprint:
           max: 120
           unit_of_measurement: min
 
+    notify_entity:
+      name: Benachrichtigung (optional)
+      default: ""
+      selector:
+        entity:
+          domain: notify
+
+    notify_message:
+      name: Nachricht bei Verzögerung
+      default: "Abendliches Ausschalten wurde verzögert."
+      selector:
+        text:
+
 mode: restart
 
-# --- TARGET EXPANSION ---
 variables:
-  expand_target: >
-    {% macro expand(t) %}
-    {%- set ns = namespace(ret=[]) %}
-    {%- for key in ['entity', 'device', 'area', 'label'] %}
-      {%- set items = t.get(key ~ '_id', []) %}
-      {%- if items %}
-        {%- set items = [items] if items is string else items %}
-        {%- if key == 'entity' %}
-          {%- set ns.ret = ns.ret + items %}
-        {%- else %}
-          {%- for id in items %}
-            {%- set ents = (key ~ '_entities')(id) %}
-            {%- if ents %}
-              {%- set ns.ret = ns.ret + ents %}
-            {%- endif %}
-          {%- endfor %}
-        {%- endif %}
-      {%- endif %}
-    {%- endfor %}
-    {{ ns.ret | unique }}
-    {% endmacro %}
-    {{ expand }}
-
   expanded_main: >
-    {{ expand_target(i.target_main) }}
+    {{ expand(i.target_main) | map(attribute='entity_id') | list }}
 
   expanded_only_on: >
-    {{ expand_target(i.target_only_on) }}
+    {{ expand(i.target_only_on) | map(attribute='entity_id') | list }}
 
   expanded_only_off: >
-    {{ expand_target(i.target_only_off) }}
+    {{ expand(i.target_only_off) | map(attribute='entity_id') | list }}
 
 trigger:
   - platform: time
@@ -174,7 +164,6 @@ action:
               while:
                 - condition: or
                   conditions:
-                    # Verbrauch nur prüfen, wenn Sensor gesetzt
                     - condition: template
                       value_template: >
                         {% if i.power_sensor != "" %}
@@ -186,6 +175,14 @@ action:
                       entity_id: !input lamps_to_check
                       state: "on"
               sequence:
+                - choose:
+                    - conditions:
+                        - condition: template
+                          value_template: "{{ i.notify_entity != '' }}"
+                      sequence:
+                        - service: "{{ i.notify_entity }}"
+                          data:
+                            message: "{{ i.notify_message }}"
                 - delay:
                     minutes: !input delay_minutes
 
@@ -215,6 +212,14 @@ action:
                       entity_id: !input lamps_to_check
                       state: "on"
               sequence:
+                - choose:
+                    - conditions:
+                        - condition: template
+                          value_template: "{{ i.notify_entity != '' }}"
+                      sequence:
+                        - service: "{{ i.notify_entity }}"
+                          data:
+                            message: "{{ i.notify_message }}"
                 - delay:
                     minutes: !input delay_minutes
 
