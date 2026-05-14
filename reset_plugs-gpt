@@ -1,0 +1,86 @@
+blueprint:
+  name: ZHA - Energiezähler mehrerer Steckdosen jährlich zurücksetzen
+  description: >
+    Setzt bei ausgewählten ZHA-Zigbee-Geräten per
+    Basic Cluster Command "reset_fact_default (0x0000)"
+    den Energiezähler zurück.
+
+    WARNUNG:
+    Manche Geräte führen damit einen echten Factory Reset aus.
+    Erst mit einem Testgerät prüfen!
+
+  domain: automation
+
+  input:
+    target_devices:
+      name: ZHA Geräte
+      description: >
+        Wähle die Zigbee-Geräte aus,
+        deren Verbrauchszähler zurückgesetzt werden sollen.
+      selector:
+        device:
+          multiple: true
+          filter:
+            integration: zha
+
+    reset_month:
+      name: Monat
+      description: Monat der Ausführung
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 12
+          mode: box
+
+    reset_day:
+      name: Tag
+      description: Tag der Ausführung
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 31
+          mode: box
+
+    reset_time:
+      name: Uhrzeit
+      description: Uhrzeit der Ausführung
+      default: "00:00:00"
+      selector:
+        time:
+
+trigger:
+  - platform: time
+    at: !input reset_time
+
+condition:
+  - condition: template
+    value_template: >
+      {{ now().month == ( !input reset_month )
+         and now().day == ( !input reset_day ) }}
+
+mode: single
+
+variables:
+  devices: !input target_devices
+
+action:
+  - repeat:
+      for_each: "{{ devices }}"
+      sequence:
+        - service: zha.issue_zigbee_cluster_command
+          data:
+            ieee: >
+              {{
+                device_attr(repeat.item, 'identifiers')
+                | selectattr(0, 'eq', 'zha')
+                | map(attribute=1)
+                | first
+              }}
+            endpoint_id: 1
+            cluster_id: 0
+            cluster_type: in
+            command: 0
+            command_type: server
+            params: {}
