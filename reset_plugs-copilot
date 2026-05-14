@@ -1,0 +1,49 @@
+blueprint:
+  name: ZHA – Verbrauchszähler zurücksetzen (reset_fact_default)
+  description: >
+    Setzt bei ausgewählten ZHA-Geräten (z. B. Steckdosen) den Verbrauchszähler
+    über den Zigbee-Befehl "reset_fact_default" (Cluster 0x0000) auf 0.
+    Kann zeitgesteuert oder manuell ausgelöst werden.
+  domain: automation
+  input:
+    target_devices:
+      name: Zigbee Geräte auswählen
+      description: >
+        Wähle ein oder mehrere ZHA-Geräte aus. Suchfeld verfügbar.
+        (Optional: Filter auf Steckdosen über Geräteklasse)
+      selector:
+        target:
+          entity:
+            integration: zha
+            domain: sensor
+    schedule:
+      name: Zeitplan (optional)
+      description: >
+        Wenn gesetzt, wird der Reset automatisch zu diesem Zeitpunkt ausgeführt.
+      default: []
+      selector:
+        time: {}
+
+mode: parallel
+
+trigger:
+  - platform: time
+    at: !input schedule
+
+action:
+  - variables:
+      devices: !input target_devices
+
+  - repeat:
+      for_each: "{{ devices.entity_id }}"
+      sequence:
+        - service: zha.issue_zigbee_cluster_command
+          data:
+            ieee: "{{ state_attr(repeat.item, 'ieee') }}"
+            endpoint_id: 1
+            cluster_id: 0x0000
+            cluster_type: "in"
+            command: 0x0000
+            command_type: "server"
+            params:
+              value: 0
