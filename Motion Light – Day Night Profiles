@@ -1,0 +1,181 @@
+blueprint:
+  name: Motion Light – Day / Night Profiles
+  description: >
+    Switches lights on motion with separate settings for day and night.
+    Night starts at sunset + offset and ends at sunrise + offset.
+    Each profile has its own brightness, colour temperature and off-delay.
+    The light can be disabled completely during the day.
+  domain: automation
+  input:
+    motion_sensor:
+      name: Motion sensor
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+              device_class:
+                - motion
+                - occupancy
+                - presence
+    lights:
+      name: Lights
+      description: Pick lights, or a whole area/room.
+      selector:
+        target:
+          entity:
+            - domain: light
+
+    sun_section:
+      name: Day / Night definition
+      icon: mdi:weather-sunset
+      collapsed: false
+      input:
+        sunset_offset:
+          name: Night starts (minutes after sunset)
+          description: Negative values = before sunset.
+          default: 30
+          selector:
+            number:
+              min: -180
+              max: 180
+              step: 5
+              unit_of_measurement: min
+              mode: box
+        sunrise_offset:
+          name: Night ends (minutes after sunrise)
+          description: Negative values = before sunrise.
+          default: 30
+          selector:
+            number:
+              min: -180
+              max: 180
+              step: 5
+              unit_of_measurement: min
+              mode: box
+
+    day_section:
+      name: Day profile
+      icon: mdi:white-balance-sunny
+      collapsed: false
+      input:
+        day_enabled:
+          name: Switch lights on during the day
+          description: Turn off to leave the light off during the day.
+          default: true
+          selector:
+            boolean:
+        day_brightness:
+          name: Day brightness
+          default: 100
+          selector:
+            number:
+              min: 1
+              max: 100
+              unit_of_measurement: "%"
+              mode: slider
+        day_color_temp:
+          name: Day colour temperature
+          description: Low = warm, high = cold white.
+          default: 4000
+          selector:
+            number:
+              min: 2000
+              max: 6500
+              step: 100
+              unit_of_measurement: K
+              mode: slider
+        day_timeout:
+          name: Day off-delay
+          description: Seconds after the last movement until the lights switch off.
+          default: 120
+          selector:
+            number:
+              min: 5
+              max: 3600
+              unit_of_measurement: s
+              mode: box
+
+    night_section:
+      name: Night profile
+      icon: mdi:weather-night
+      collapsed: false
+      input:
+        night_brightness:
+          name: Night brightness
+          default: 20
+          selector:
+            number:
+              min: 1
+              max: 100
+              unit_of_measurement: "%"
+              mode: slider
+        night_color_temp:
+          name: Night colour temperature
+          description: Low = warm, high = cold white.
+          default: 2200
+          selector:
+            number:
+              min: 2000
+              max: 6500
+              step: 100
+              unit_of_measurement: K
+              mode: slider
+        night_timeout:
+          name: Night off-delay
+          description: Seconds after the last movement until the lights switch off.
+          default: 60
+          selector:
+            number:
+              min: 5
+              max: 3600
+              unit_of_measurement: s
+              mode: box
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  motion_sensor: !input motion_sensor
+  sunset_offset: !input sunset_offset
+  sunrise_offset: !input sunrise_offset
+  day_enabled: !input day_enabled
+  day_brightness: !input day_brightness
+  day_color_temp: !input day_color_temp
+  day_timeout: !input day_timeout
+  night_brightness: !input night_brightness
+  night_color_temp: !input night_color_temp
+  night_timeout: !input night_timeout
+  is_night: >
+    {% set ss = as_local(as_datetime(state_attr('sun.sun', 'next_setting')))
+         + timedelta(minutes=sunset_offset | int(0)) %}
+    {% set sr = as_local(as_datetime(state_attr('sun.sun', 'next_rising')))
+         + timedelta(minutes=sunrise_offset | int(0)) %}
+    {% set n = now().hour * 60 + now().minute %}
+    {{ n >= (ss.hour * 60 + ss.minute) or n < (sr.hour * 60 + sr.minute) }}
+  brightness: "{{ night_brightness if is_night else day_brightness }}"
+  color_temp: "{{ night_color_temp if is_night else day_color_temp }}"
+  timeout: "{{ night_timeout if is_night else day_timeout }}"
+
+trigger:
+  - platform: state
+    entity_id: !input motion_sensor
+    to: "on"
+
+condition:
+  - condition: template
+    value_template: "{{ is_night or day_enabled }}"
+
+action:
+  - service: light.turn_on
+    target: !input lights
+    data:
+      brightness_pct: "{{ brightness | int }}"
+      color_temp_kelvin: "{{ color_temp | int }}"
+  - wait_for_trigger:
+      - platform: state
+        entity_id: !input motion_sensor
+        to: "off"
+        for:
+          seconds: "{{ timeout | int }}"
+  - service: light.turn_off
+    target: !input lights
