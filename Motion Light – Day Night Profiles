@@ -100,9 +100,15 @@ blueprint:
       icon: mdi:weather-night
       collapsed: false
       input:
+        night_enabled:
+          name: Switch lights on during the night
+          description: Turn off to leave the light off during the night.
+          default: true
+          selector:
+            boolean:
         night_brightness:
           name: Night brightness
-          default: 20
+          default: 25
           selector:
             number:
               min: 1
@@ -142,6 +148,7 @@ variables:
   day_brightness: !input day_brightness
   day_color_temp: !input day_color_temp
   day_timeout: !input day_timeout
+  night_enabled: !input night_enabled
   night_brightness: !input night_brightness
   night_color_temp: !input night_color_temp
   night_timeout: !input night_timeout
@@ -163,7 +170,7 @@ trigger:
 
 condition:
   - condition: template
-    value_template: "{{ is_night or day_enabled }}"
+    value_template: "{{ night_enabled if is_night else day_enabled }}"
 
 action:
   - service: light.turn_on
