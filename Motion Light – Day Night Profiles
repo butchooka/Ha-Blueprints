@@ -33,7 +33,7 @@ blueprint:
         sunset_offset:
           name: Night starts (minutes after sunset)
           description: Negative values = before sunset.
-          default: 30
+          default: -30
           selector:
             number:
               min: -180
@@ -87,7 +87,7 @@ blueprint:
         day_timeout:
           name: Day off-delay
           description: Seconds after the last movement until the lights switch off.
-          default: 120
+          default: 30
           selector:
             number:
               min: 5
@@ -123,7 +123,7 @@ blueprint:
         night_timeout:
           name: Night off-delay
           description: Seconds after the last movement until the lights switch off.
-          default: 60
+          default: 30
           selector:
             number:
               min: 5
