@@ -1,0 +1,1153 @@
+---
+blueprint:
+  name: Bilresa Drehrad kompakt
+  description: |
+    Kompakter Blueprint für das **IKEA BILRESA Drehrad** (Matter, 3 Kanäle).
+
+    Pro Kanal wird ein Ziel gewählt (Lampe, Media-Player, Gerät oder Bereich).
+    Das Drehrad regelt automatisch die **Helligkeit** (Lampen) oder die
+    **Lautstärke** (Media-Player). Enthält das Ziel beides, haben Lampen Vorrang.
+
+    - Einfachklick: Ziel **AN** (änderbar)
+    - Doppelklick: Ziel **AUS** (änderbar)
+    - Dreifachklick und langer Druck: frei belegbar
+    - Drehen kann ein- und ausschalten (abschaltbar)
+
+    Für die Auswertung „Sofort“ müssen die 9 versteckten Sensor-Entitäten des
+    Drehrads aktiviert sein (Gerät → Entitäten → „deaktivierte Entitäten“).
+
+    Version: 2026-11-11d – basiert auf „Ikea_bilresa_scroll_wheel“ von jhol-byte
+    (https://community.home-assistant.io/t/965365)
+  domain: automation
+  homeassistant:
+    min_version: 2025.4.0
+
+  input:
+    remote:
+      name: Drehrad
+      description: IKEA BILRESA Drehrad (Matter)
+      selector:
+        device:
+          filter:
+            manufacturer: IKEA of Sweden
+            model: BILRESA scroll wheel
+            integration: matter
+
+
+    # ---------------------------------------------------------------- Kanal 1
+    channel1_section:
+      name: Kanal 1
+      icon: mdi:numeric-1-circle-outline
+      collapsed: true
+      input:
+        target_ch1:
+          name: "Kanal 1: Ziel"
+          description: >-
+            Lampe(n), Media-Player, Gerät oder Bereich, das dieser Kanal steuert.
+            Leer lassen, wenn der Kanal nur eigene Aktionen ausführen soll.
+          default: {}
+          selector:
+            target:
+              entity:
+                - domain:
+                    - light
+                    - media_player
+        wheel_mode_ch1:
+          name: "Kanal 1: Funktion des Drehrads"
+          description: >-
+            „Automatisch“ wählt nach dem Ziel: Lampe → Helligkeit,
+            Media-Player → Lautstärke.
+          default: auto
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - label: Automatisch (nach Ziel)
+                  value: auto
+                - label: "Licht: Helligkeit"
+                  value: light
+                - label: "Media: Lautstärke"
+                  value: media
+                - label: Eigene Dreh-Aktion
+                  value: custom
+        click_mode_ch1:
+          name: "Kanal 1: Einfachklick"
+          default: turn_on
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - label: Ziel einschalten (AN)
+                  value: turn_on
+                - label: Ziel ausschalten (AUS)
+                  value: turn_off
+                - label: Ziel umschalten
+                  value: toggle
+                - label: Eigene Aktion
+                  value: custom
+        click_action_ch1:
+          name: "Kanal 1: Einfachklick – eigene Aktion"
+          description: Nur bei „Eigene Aktion“. Leer = keine Aktion.
+          default: []
+          selector:
+            action: {}
+        double_mode_ch1:
+          name: "Kanal 1: Doppelklick"
+          default: turn_off
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - label: Ziel einschalten (AN)
+                  value: turn_on
+                - label: Ziel ausschalten (AUS)
+                  value: turn_off
+                - label: Ziel umschalten
+                  value: toggle
+                - label: Eigene Aktion
+                  value: custom
+        double_action_ch1:
+          name: "Kanal 1: Doppelklick – eigene Aktion"
+          description: Nur bei „Eigene Aktion“. Leer = keine Aktion.
+          default: []
+          selector:
+            action: {}
+        triple_action_ch1:
+          name: "Kanal 1: Dreifachklick"
+          description: Frei belegbare Aktion.
+          default: []
+          selector:
+            action: {}
+        long_action_ch1:
+          name: "Kanal 1: Langer Druck"
+          description: Frei belegbare Aktion (einmalig beim Halten).
+          default: []
+          selector:
+            action: {}
+        wheel_action_ch1:
+          name: "Kanal 1: Eigene Dreh-Aktion"
+          description: |
+            Nur bei Funktion „Eigene Dreh-Aktion“. Verfügbare Variablen:
+            - `scroll_direction`: 'left' oder 'right'
+            - `scroll_clicks`: Anzahl Rasterschritte (bei „Sofort“ immer 1)
+          default: []
+          selector:
+            action: {}
+
+
+    # ---------------------------------------------------------------- Kanal 2
+    channel2_section:
+      name: Kanal 2
+      icon: mdi:numeric-2-circle-outline
+      collapsed: true
+      input:
+        target_ch2:
+          name: "Kanal 2: Ziel"
+          description: >-
+            Lampe(n), Media-Player, Gerät oder Bereich, das dieser Kanal steuert.
+            Leer lassen, wenn der Kanal nur eigene Aktionen ausführen soll.
+          default: {}
+          selector:
+            target:
+              entity:
+                - domain:
+                    - light
+                    - media_player
+        wheel_mode_ch2:
+          name: "Kanal 2: Funktion des Drehrads"
+          description: >-
+            „Automatisch“ wählt nach dem Ziel: Lampe → Helligkeit,
+            Media-Player → Lautstärke.
+          default: auto
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - label: Automatisch (nach Ziel)
+                  value: auto
+                - label: "Licht: Helligkeit"
+                  value: light
+                - label: "Media: Lautstärke"
+                  value: media
+                - label: Eigene Dreh-Aktion
+                  value: custom
+        click_mode_ch2:
+          name: "Kanal 2: Einfachklick"
+          default: turn_on
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - label: Ziel einschalten (AN)
+                  value: turn_on
+                - label: Ziel ausschalten (AUS)
+                  value: turn_off
+                - label: Ziel umschalten
+                  value: toggle
+                - label: Eigene Aktion
+                  value: custom
+        click_action_ch2:
+          name: "Kanal 2: Einfachklick – eigene Aktion"
+          description: Nur bei „Eigene Aktion“. Leer = keine Aktion.
+          default: []
+          selector:
+            action: {}
+        double_mode_ch2:
+          name: "Kanal 2: Doppelklick"
+          default: turn_off
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - label: Ziel einschalten (AN)
+                  value: turn_on
+                - label: Ziel ausschalten (AUS)
+                  value: turn_off
+                - label: Ziel umschalten
+                  value: toggle
+                - label: Eigene Aktion
+                  value: custom
+        double_action_ch2:
+          name: "Kanal 2: Doppelklick – eigene Aktion"
+          description: Nur bei „Eigene Aktion“. Leer = keine Aktion.
+          default: []
+          selector:
+            action: {}
+        triple_action_ch2:
+          name: "Kanal 2: Dreifachklick"
+          description: Frei belegbare Aktion.
+          default: []
+          selector:
+            action: {}
+        long_action_ch2:
+          name: "Kanal 2: Langer Druck"
+          description: Frei belegbare Aktion (einmalig beim Halten).
+          default: []
+          selector:
+            action: {}
+        wheel_action_ch2:
+          name: "Kanal 2: Eigene Dreh-Aktion"
+          description: |
+            Nur bei Funktion „Eigene Dreh-Aktion“. Verfügbare Variablen:
+            - `scroll_direction`: 'left' oder 'right'
+            - `scroll_clicks`: Anzahl Rasterschritte (bei „Sofort“ immer 1)
+          default: []
+          selector:
+            action: {}
+
+
+    # ---------------------------------------------------------------- Kanal 3
+    channel3_section:
+      name: Kanal 3
+      icon: mdi:numeric-3-circle-outline
+      collapsed: true
+      input:
+        target_ch3:
+          name: "Kanal 3: Ziel"
+          description: >-
+            Lampe(n), Media-Player, Gerät oder Bereich, das dieser Kanal steuert.
+            Leer lassen, wenn der Kanal nur eigene Aktionen ausführen soll.
+          default: {}
+          selector:
+            target:
+              entity:
+                - domain:
+                    - light
+                    - media_player
+        wheel_mode_ch3:
+          name: "Kanal 3: Funktion des Drehrads"
+          description: >-
+            „Automatisch“ wählt nach dem Ziel: Lampe → Helligkeit,
+            Media-Player → Lautstärke.
+          default: auto
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - label: Automatisch (nach Ziel)
+                  value: auto
+                - label: "Licht: Helligkeit"
+                  value: light
+                - label: "Media: Lautstärke"
+                  value: media
+                - label: Eigene Dreh-Aktion
+                  value: custom
+        click_mode_ch3:
+          name: "Kanal 3: Einfachklick"
+          default: turn_on
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - label: Ziel einschalten (AN)
+                  value: turn_on
+                - label: Ziel ausschalten (AUS)
+                  value: turn_off
+                - label: Ziel umschalten
+                  value: toggle
+                - label: Eigene Aktion
+                  value: custom
+        click_action_ch3:
+          name: "Kanal 3: Einfachklick – eigene Aktion"
+          description: Nur bei „Eigene Aktion“. Leer = keine Aktion.
+          default: []
+          selector:
+            action: {}
+        double_mode_ch3:
+          name: "Kanal 3: Doppelklick"
+          default: turn_off
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - label: Ziel einschalten (AN)
+                  value: turn_on
+                - label: Ziel ausschalten (AUS)
+                  value: turn_off
+                - label: Ziel umschalten
+                  value: toggle
+                - label: Eigene Aktion
+                  value: custom
+        double_action_ch3:
+          name: "Kanal 3: Doppelklick – eigene Aktion"
+          description: Nur bei „Eigene Aktion“. Leer = keine Aktion.
+          default: []
+          selector:
+            action: {}
+        triple_action_ch3:
+          name: "Kanal 3: Dreifachklick"
+          description: Frei belegbare Aktion.
+          default: []
+          selector:
+            action: {}
+        long_action_ch3:
+          name: "Kanal 3: Langer Druck"
+          description: Frei belegbare Aktion (einmalig beim Halten).
+          default: []
+          selector:
+            action: {}
+        wheel_action_ch3:
+          name: "Kanal 3: Eigene Dreh-Aktion"
+          description: |
+            Nur bei Funktion „Eigene Dreh-Aktion“. Verfügbare Variablen:
+            - `scroll_direction`: 'left' oder 'right'
+            - `scroll_clicks`: Anzahl Rasterschritte (bei „Sofort“ immer 1)
+          default: []
+          selector:
+            action: {}
+
+
+    # ------------------------------------------------- Globale Einstellungen
+    wheel_section:
+      name: Drehrad (alle Kanäle)
+      icon: mdi:rotate-360
+      collapsed: true
+      input:
+        eval_mode:
+          name: Auswertung des Drehrads
+          description: |
+            - **Sofort**: reagiert schon während des Drehens über die versteckten
+              Sensor-Entitäten des Drehrads (müssen am Gerät aktiviert sein) und
+              gleicht die Schrittzahl mit der Summenmeldung des Rads ab.
+            - **Entspannt**: eine Aktion nach dem Drehen, funktioniert ohne die
+              versteckten Sensoren.
+          default: instant
+          selector:
+            select:
+              options:
+                - label: Sofort (versteckte Sensoren)
+                  value: instant
+                - label: Entspannt
+                  value: relaxed
+        clicks_per_turn:
+          name: Rasterschritte pro Umdrehung
+          description: >-
+            Anzahl der Rasterschritte, die das Rad bei einer vollen Umdrehung
+            meldet. Wert anpassen, falls 0–100 % nicht genau zur gewählten
+            Anzahl Umdrehungen passt.
+          default: 18
+          selector:
+            number:
+              min: 4
+              max: 60
+              step: 1
+              mode: box
+
+    light_section:
+      name: Licht (alle Kanäle)
+      icon: mdi:lightbulb-on-outline
+      collapsed: true
+      input:
+        light_turns:
+          name: Umdrehungen für 0 % bis 100 % Helligkeit
+          default: "1"
+          selector:
+            select:
+              options:
+                - label: 1 volle Umdrehung
+                  value: "1"
+                - label: 2 volle Umdrehungen
+                  value: "2"
+        light_turn_on:
+          name: Drehen schaltet Licht ein
+          description: Rechtsdrehen schaltet ausgeschaltete Lampen (dunkel beginnend) ein.
+          default: true
+          selector:
+            boolean:
+        light_turn_off:
+          name: Drehen schaltet Licht aus
+          description: Linksdrehen unter die kleinste Helligkeit schaltet die Lampen aus.
+          default: true
+          selector:
+            boolean:
+        light_transition:
+          name: Übergangszeit
+          description: Dauer der Helligkeitsübergänge in Sekunden.
+          default: 0.3
+          selector:
+            number:
+              min: 0
+              max: 5
+              step: 0.1
+              unit_of_measurement: s
+              mode: box
+
+    media_section:
+      name: Media (alle Kanäle)
+      icon: mdi:volume-high
+      collapsed: true
+      input:
+        media_turns:
+          name: Umdrehungen für 0 % bis maximale Lautstärke
+          default: "1"
+          selector:
+            select:
+              options:
+                - label: 1 volle Umdrehung
+                  value: "1"
+                - label: 2 volle Umdrehungen
+                  value: "2"
+        volume_max_pct:
+          name: Maximale Lautstärke
+          description: Lauter als dieser Wert stellt das Drehrad nicht ein.
+          default: 40
+          selector:
+            number:
+              min: 5
+              max: 100
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
+        media_turn_on:
+          name: Drehen schaltet Media-Player ein
+          description: Rechtsdrehen schaltet ausgeschaltete Media-Player ein.
+          default: true
+          selector:
+            boolean:
+        media_turn_off:
+          name: Drehen schaltet Media-Player aus
+          description: Linksdrehen unter Lautstärke 0 schaltet die Media-Player aus.
+          default: true
+          selector:
+            boolean:
+
+
+trigger:
+
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_button_ch1 }}"
+    id: button_ch1
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_scroll_left_ch1 }}"
+    id: left_ch1
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_scroll_right_ch1 }}"
+    id: right_ch1
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_scroll_left_ext_ch1 }}"
+    id: left_ext_ch1
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_scroll_right_ext_ch1 }}"
+    id: right_ext_ch1
+
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_button_ch2 }}"
+    id: button_ch2
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_scroll_left_ch2 }}"
+    id: left_ch2
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_scroll_right_ch2 }}"
+    id: right_ch2
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_scroll_left_ext_ch2 }}"
+    id: left_ext_ch2
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_scroll_right_ext_ch2 }}"
+    id: right_ext_ch2
+
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_button_ch3 }}"
+    id: button_ch3
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_scroll_left_ch3 }}"
+    id: left_ch3
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_scroll_right_ch3 }}"
+    id: right_ch3
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_scroll_left_ext_ch3 }}"
+    id: left_ext_ch3
+  - trigger: event
+    event_type: state_changed
+    event_data:
+      entity_id: "{{ var_scroll_right_ext_ch3 }}"
+    id: right_ext_ch3
+
+
+condition:
+  - condition: template
+    value_template: >-
+      {{ trigger.event.data.old_state is not none
+         and trigger.event.data.new_state is not none
+         and trigger.event.data.old_state.state != 'unavailable'
+         and trigger.event.data.new_state.state != 'unavailable'
+         and ('_ext_' not in trigger.id or trigger.event.data.new_state.state == '1') }}
+
+action:
+  - variables:
+      channel: "{{ trigger.id[-3:] }}"
+      is_button: "{{ trigger.id.startswith('button') }}"
+      is_ext: "{{ '_ext_' in trigger.id }}"
+      event_type: "{{ trigger.event.data.new_state.attributes.event_type | default('') }}"
+      # Ziel (Entität, Gerät, Bereich, Etage, Label) in Entitäten auflösen
+      entities: >-
+        {% set t = cfg[channel]['target'] %}
+        {% set ns = namespace(e=[]) %}
+        {% if t is mapping %}
+          {% for key in ['entity_id', 'device_id', 'area_id', 'floor_id', 'label_id'] %}
+            {% set x = t.get(key) or [] %}
+            {% for i in ([x] if x is string else x) %}
+              {% if key == 'entity_id' %}
+                {% set ns.e = ns.e + [i] %}
+              {% elif key == 'device_id' %}
+                {% set ns.e = ns.e + device_entities(i) | list %}
+              {% elif key == 'area_id' %}
+                {% set ns.e = ns.e + area_entities(i) | list %}
+              {% elif key == 'floor_id' %}
+                {% for a in floor_areas(i) %}
+                  {% set ns.e = ns.e + area_entities(a) | list %}
+                {% endfor %}
+              {% else %}
+                {% set ns.e = ns.e + label_entities(i) | list %}
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+        {% endif %}
+        {{ ns.e | unique | list }}
+      lights: >-
+        {{ entities | select('match', 'light\.') | list }}
+      players: >-
+        {{ entities | select('match', 'media_player\.') | list }}
+      wheel_mode: "{{ cfg[channel]['wheel'] }}"
+      # Lampen haben Vorrang, wenn das Ziel beides enthält
+      func: >-
+        {% if wheel_mode in ['light', 'media'] %}
+          {{ wheel_mode }}
+        {% elif lights | count > 0 %}
+          light
+        {% elif players | count > 0 %}
+          media
+        {% else %}
+          none
+        {% endif %}
+
+  - choose:
+      # ------------------------------------------------------ Einfachklick
+      - conditions: "{{ is_button and event_type == 'multi_press_1' }}"
+        sequence:
+          - variables:
+              mode: "{{ cfg[channel]['click'] }}"
+          - choose:
+              - conditions: "{{ mode == 'custom' }}"
+                sequence:
+                  - if: "{{ channel == 'ch1' }}"
+                    then: !input click_action_ch1
+                  - if: "{{ channel == 'ch2' }}"
+                    then: !input click_action_ch2
+                  - if: "{{ channel == 'ch3' }}"
+                    then: !input click_action_ch3
+              - conditions: "{{ func == 'light' }}"
+                sequence:
+                  - action: "light.{{ mode }}"
+                    target:
+                      entity_id: "{{ lights }}"
+              - conditions: "{{ func == 'media' }}"
+                sequence:
+                  - action: "media_player.{{ mode }}"
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ players }}"
+
+      # -------------------------------------------------------- Doppelklick
+      - conditions: "{{ is_button and event_type == 'multi_press_2' }}"
+        sequence:
+          - variables:
+              mode: "{{ cfg[channel]['double'] }}"
+          - choose:
+              - conditions: "{{ mode == 'custom' }}"
+                sequence:
+                  - if: "{{ channel == 'ch1' }}"
+                    then: !input double_action_ch1
+                  - if: "{{ channel == 'ch2' }}"
+                    then: !input double_action_ch2
+                  - if: "{{ channel == 'ch3' }}"
+                    then: !input double_action_ch3
+              - conditions: "{{ func == 'light' }}"
+                sequence:
+                  - action: "light.{{ mode }}"
+                    target:
+                      entity_id: "{{ lights }}"
+              - conditions: "{{ func == 'media' }}"
+                sequence:
+                  - action: "media_player.{{ mode }}"
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ players }}"
+
+      # ------------------------------------------------------ Dreifachklick
+      - conditions: "{{ is_button and event_type == 'multi_press_3' }}"
+        sequence:
+          - if: "{{ channel == 'ch1' }}"
+            then: !input triple_action_ch1
+          - if: "{{ channel == 'ch2' }}"
+            then: !input triple_action_ch2
+          - if: "{{ channel == 'ch3' }}"
+            then: !input triple_action_ch3
+
+      # -------------------------------------------------------- Langer Druck
+      - conditions: "{{ is_button and event_type == 'long_press' }}"
+        sequence:
+          - if: "{{ channel == 'ch1' }}"
+            then: !input long_action_ch1
+          - if: "{{ channel == 'ch2' }}"
+            then: !input long_action_ch2
+          - if: "{{ channel == 'ch3' }}"
+            then: !input long_action_ch3
+
+      # ------------------------------------------------------------- Drehrad
+      # Sofort: Sensoren liefern einzelne Schritte, die Ereignisse die exakte
+      # Summe. Die eigene Dreh-Aktion nutzt nur eine der beiden Quellen.
+      - conditions: >-
+          {{ not is_button and (
+               (is_ext and eval_mode == 'instant')
+               or (not is_ext and (eval_mode == 'relaxed' or wheel_mode != 'custom')) ) }}
+        sequence:
+          - variables:
+              scroll_direction: "{{ 'left' if trigger.id.startswith('left') else 'right' }}"
+              scroll_clicks: >-
+                {% if not is_ext %}
+                  {{ trigger.event.data.new_state.attributes.totalNumberOfPressesCounted | int(0) }}
+                {% else %}
+                  1
+                {% endif %}
+              first_delta: >-
+                {{ (scroll_clicks | int(1)) * (-1 if scroll_direction == 'left' else 1) }}
+              run_id: "{{ context.id }}"
+              # bereits über die Sofort-Sensoren gezählte Schritte je Richtung
+              inst_left: "{{ 1 if is_ext and scroll_direction == 'left' else 0 }}"
+              inst_right: "{{ 1 if is_ext and scroll_direction == 'right' else 0 }}"
+              # Entitäten, auf die während des Drehens weiter gewartet wird
+              left_evt_entity: >-
+                {{ {'ch1': var_scroll_left_ch1, 'ch2': var_scroll_left_ch2, 'ch3': var_scroll_left_ch3}[channel] }}
+              right_evt_entity: >-
+                {{ {'ch1': var_scroll_right_ch1, 'ch2': var_scroll_right_ch2, 'ch3': var_scroll_right_ch3}[channel] }}
+              left_ext_entity: >-
+                {% if eval_mode == 'instant' %}
+                  {{ {'ch1': var_scroll_left_ext_ch1, 'ch2': var_scroll_left_ext_ch2, 'ch3': var_scroll_left_ext_ch3}[channel] }}
+                {% else %}
+                  -
+                {% endif %}
+              right_ext_entity: >-
+                {% if eval_mode == 'instant' %}
+                  {{ {'ch1': var_scroll_right_ext_ch1, 'ch2': var_scroll_right_ext_ch2, 'ch3': var_scroll_right_ext_ch3}[channel] }}
+                {% else %}
+                  -
+                {% endif %}
+          - choose:
+              # ---- eigene Dreh-Aktion
+              - conditions: "{{ wheel_mode == 'custom' }}"
+                sequence:
+                  - if: "{{ channel == 'ch1' }}"
+                    then: !input wheel_action_ch1
+                  - if: "{{ channel == 'ch2' }}"
+                    then: !input wheel_action_ch2
+                  - if: "{{ channel == 'ch3' }}"
+                    then: !input wheel_action_ch3
+
+              # ---- Licht: Helligkeit
+              # Ein Lauf begleitet die ganze Drehbewegung und führt den Zielwert
+              # selbst mit. Senden und Zählen laufen parallel, damit während eines
+              # Lampenbefehls keine Rasterschritte verloren gehen.
+              - conditions: "{{ func == 'light' and lights | count > 0 }}"
+                sequence:
+                  - variables:
+                      step: "{{ 100 / ((light_turns | int(1)) * (clicks_per_turn | int(18))) }}"
+                      upper: 100
+                      on_lights: "{{ lights | select('is_state', 'on') | list }}"
+                      group: "{{ on_lights if on_lights | count > 0 else lights }}"
+                      # Startwert: hellste eingeschaltete Lampe in Prozent (aus = 0)
+                      base: >-
+                        {% set b = on_lights | map('state_attr', 'brightness')
+                                   | select('number') | list %}
+                        {{ 0 if on_lights | count == 0
+                           else (((b | max) / 255 * 100) if b else 100) }}
+                      target: "{{ [[base + first_delta * step, 0] | max, 100] | min }}"
+                      pending: "{{ first_delta }}"
+                      sent: false
+                      done: false
+                  # ausgeschaltete Lampen nur durch Rechtsdrehen einschalten
+                  - condition: template
+                    value_template: >-
+                      {{ first_delta != 0 and
+                         (on_lights | count > 0 or (first_delta > 0 and light_turn_on)) }}
+                  - repeat:
+                      until: "{{ done or repeat.index >= 200 }}"
+                      sequence:
+                        - variables:
+                            pending: 0
+                            sent: false
+                        - parallel:
+                            # A: aktuellen Zielwert senden und das Ende des Befehls melden
+                            - sequence:
+                                - choose:
+                                    - conditions: "{{ target >= 1 }}"
+                                      sequence:
+                                        - action: light.turn_on
+                                          continue_on_error: true
+                                          target:
+                                            entity_id: "{{ group }}"
+                                          data:
+                                            brightness_pct: "{{ target | round(0) | int }}"
+                                            transition: "{{ light_transition }}"
+                                    - conditions: "{{ light_turn_off }}"
+                                      sequence:
+                                        - action: light.turn_off
+                                          continue_on_error: true
+                                          target:
+                                            entity_id: "{{ group }}"
+                                          data:
+                                            transition: "{{ light_transition }}"
+                                  default:
+                                    - action: light.turn_on
+                                      continue_on_error: true
+                                      target:
+                                        entity_id: "{{ group }}"
+                                      data:
+                                        brightness_pct: 1
+                                        transition: "{{ light_transition }}"
+                                - delay:
+                                    milliseconds: 10
+                                - event: bilresa_drehrad_kompakt_sent
+                                  event_data:
+                                    run: "{{ run_id }}"
+                            # B: währenddessen weitere Rasterschritte zählen
+                            - sequence:
+                                - repeat:
+                                    until: "{{ done or (sent and pending != 0) or repeat.index >= 300 }}"
+                                    sequence:
+                                      - wait_for_trigger:
+                                          - trigger: event
+                                            event_type: state_changed
+                                            event_data:
+                                              entity_id: "{{ left_ext_entity }}"
+                                            id: left_ext
+                                          - trigger: event
+                                            event_type: state_changed
+                                            event_data:
+                                              entity_id: "{{ right_ext_entity }}"
+                                            id: right_ext
+                                          - trigger: event
+                                            event_type: state_changed
+                                            event_data:
+                                              entity_id: "{{ left_evt_entity }}"
+                                            id: left_evt
+                                          - trigger: event
+                                            event_type: state_changed
+                                            event_data:
+                                              entity_id: "{{ right_evt_entity }}"
+                                            id: right_evt
+                                          - trigger: event
+                                            event_type: bilresa_drehrad_kompakt_sent
+                                            event_data:
+                                              run: "{{ run_id }}"
+                                            id: sent
+                                        # solange der Befehl unterwegs ist lange warten; danach kurz auf weitere
+                                        # Schritte bzw. etwas länger auf die noch ausstehende Summenmeldung
+                                        timeout:
+                                          milliseconds: >-
+                                            {{ 5000 if not sent else (2000 if (inst_left + inst_right) > 0 else 500) }}
+                                      - variables:
+                                          w_id: "{{ 'timeout' if wait.trigger is none else wait.trigger.id }}"
+                                          w_dir: "{{ 1 if w_id.startswith('right') else (-1 if w_id.startswith('left') else 0) }}"
+                                          w_ext: "{{ w_id.endswith('_ext') }}"
+                                          # Sofort-Sensor meldet einen Rasterschritt
+                                          w_one: >-
+                                            {{ w_dir != 0 and wait.trigger.event.data.new_state is not none
+                                               and wait.trigger.event.data.new_state.state == '1' }}
+                                          # Summenmeldung des Rads
+                                          w_n: >-
+                                            {{ (wait.trigger.event.data.new_state.attributes.totalNumberOfPressesCounted | int(0))
+                                               if w_dir != 0 and not w_ext and wait.trigger.event.data.new_state is not none
+                                               else 0 }}
+                                          # Sofort-Sensor: 1 Schritt. Summenmeldung: Summe abzüglich der schon
+                                          # über die Sofort-Sensoren gezählten Schritte.
+                                          delta: >-
+                                            {% if w_dir == 0 %}
+                                              0
+                                            {% elif w_ext %}
+                                              {{ w_dir if w_one else 0 }}
+                                            {% else %}
+                                              {{ w_dir * ([w_n - (inst_right if w_dir == 1 else inst_left), 0] | max) }}
+                                            {% endif %}
+                                          inst_left: >-
+                                            {% if w_dir == -1 and w_ext %}
+                                              {{ inst_left + (1 if w_one else 0) }}
+                                            {% elif w_dir == -1 %}
+                                              {{ [inst_left - w_n, 0] | max }}
+                                            {% else %}
+                                              {{ inst_left }}
+                                            {% endif %}
+                                          inst_right: >-
+                                            {% if w_dir == 1 and w_ext %}
+                                              {{ inst_right + (1 if w_one else 0) }}
+                                            {% elif w_dir == 1 %}
+                                              {{ [inst_right - w_n, 0] | max }}
+                                            {% else %}
+                                              {{ inst_right }}
+                                            {% endif %}
+                                          # fertig, wenn nach dem Senden nichts mehr kommt
+                                          done: "{{ w_id == 'timeout' and sent and pending == 0 }}"
+                                          sent: "{{ sent or w_id in ['sent', 'timeout'] }}"
+                                          target: "{{ [[target + delta * step, 0] | max, upper] | min }}"
+                                          pending: "{{ pending + delta }}"
+
+              # ---- Media: Lautstärke (gleiches Prinzip)
+              - conditions: "{{ func == 'media' and players | count > 0 }}"
+                sequence:
+                  - variables:
+                      step: >-
+                        {{ (volume_max_pct | float(40))
+                           / ((media_turns | int(1)) * (clicks_per_turn | int(18))) }}
+                      active: >-
+                        {{ players | reject('is_state', ['off', 'standby', 'unavailable', 'unknown']) | list }}
+                      # Startwert: lautester aktiver Player in Prozent
+                      base: >-
+                        {% set v = active | map('state_attr', 'volume_level')
+                                   | select('number') | list %}
+                        {{ (v | max) * 100 if v else 0 }}
+                      # nie lauter als das Maximum (eine höhere Ausgangslautstärke bleibt)
+                      upper: "{{ [volume_max_pct | float(40), base] | max }}"
+                      target: "{{ [[base + first_delta * step, 0] | max, upper] | min }}"
+                      pending: "{{ first_delta }}"
+                      sent: false
+                      done: false
+                  - condition: template
+                    value_template: "{{ first_delta != 0 }}"
+                  - choose:
+                      # alles aus -> durch Rechtsdrehen einschalten
+                      - conditions: "{{ active | count == 0 }}"
+                        sequence:
+                          - if: "{{ first_delta > 0 and media_turn_on }}"
+                            then:
+                              - action: media_player.turn_on
+                                continue_on_error: true
+                                target:
+                                  entity_id: "{{ players }}"
+                    default:
+                      - repeat:
+                          until: "{{ done or repeat.index >= 200 }}"
+                          sequence:
+                            - variables:
+                                pending: 0
+                                sent: false
+                            - parallel:
+                                # A: aktuellen Zielwert senden und das Ende des Befehls melden
+                                - sequence:
+                                    - choose:
+                                        - conditions: "{{ target >= 0.5 }}"
+                                          sequence:
+                                            - action: media_player.volume_set
+                                              continue_on_error: true
+                                              target:
+                                                entity_id: "{{ active }}"
+                                              data:
+                                                volume_level: "{{ (target / 100) | round(3) }}"
+                                        - conditions: "{{ media_turn_off }}"
+                                          sequence:
+                                            - action: media_player.turn_off
+                                              continue_on_error: true
+                                              target:
+                                                entity_id: "{{ active }}"
+                                      default:
+                                        - action: media_player.volume_set
+                                          continue_on_error: true
+                                          target:
+                                            entity_id: "{{ active }}"
+                                          data:
+                                            volume_level: 0
+                                    - delay:
+                                        milliseconds: 10
+                                    - event: bilresa_drehrad_kompakt_sent
+                                      event_data:
+                                        run: "{{ run_id }}"
+                                # B: währenddessen weitere Rasterschritte zählen
+                                - sequence:
+                                    - repeat:
+                                        until: "{{ done or (sent and pending != 0) or repeat.index >= 300 }}"
+                                        sequence:
+                                          - wait_for_trigger:
+                                              - trigger: event
+                                                event_type: state_changed
+                                                event_data:
+                                                  entity_id: "{{ left_ext_entity }}"
+                                                id: left_ext
+                                              - trigger: event
+                                                event_type: state_changed
+                                                event_data:
+                                                  entity_id: "{{ right_ext_entity }}"
+                                                id: right_ext
+                                              - trigger: event
+                                                event_type: state_changed
+                                                event_data:
+                                                  entity_id: "{{ left_evt_entity }}"
+                                                id: left_evt
+                                              - trigger: event
+                                                event_type: state_changed
+                                                event_data:
+                                                  entity_id: "{{ right_evt_entity }}"
+                                                id: right_evt
+                                              - trigger: event
+                                                event_type: bilresa_drehrad_kompakt_sent
+                                                event_data:
+                                                  run: "{{ run_id }}"
+                                                id: sent
+                                            # solange der Befehl unterwegs ist lange warten; danach kurz auf weitere
+                                            # Schritte bzw. etwas länger auf die noch ausstehende Summenmeldung
+                                            timeout:
+                                              milliseconds: >-
+                                                {{ 5000 if not sent else (2000 if (inst_left + inst_right) > 0 else 500) }}
+                                          - variables:
+                                              w_id: "{{ 'timeout' if wait.trigger is none else wait.trigger.id }}"
+                                              w_dir: "{{ 1 if w_id.startswith('right') else (-1 if w_id.startswith('left') else 0) }}"
+                                              w_ext: "{{ w_id.endswith('_ext') }}"
+                                              # Sofort-Sensor meldet einen Rasterschritt
+                                              w_one: >-
+                                                {{ w_dir != 0 and wait.trigger.event.data.new_state is not none
+                                                   and wait.trigger.event.data.new_state.state == '1' }}
+                                              # Summenmeldung des Rads
+                                              w_n: >-
+                                                {{ (wait.trigger.event.data.new_state.attributes.totalNumberOfPressesCounted | int(0))
+                                                   if w_dir != 0 and not w_ext and wait.trigger.event.data.new_state is not none
+                                                   else 0 }}
+                                              # Sofort-Sensor: 1 Schritt. Summenmeldung: Summe abzüglich der schon
+                                              # über die Sofort-Sensoren gezählten Schritte.
+                                              delta: >-
+                                                {% if w_dir == 0 %}
+                                                  0
+                                                {% elif w_ext %}
+                                                  {{ w_dir if w_one else 0 }}
+                                                {% else %}
+                                                  {{ w_dir * ([w_n - (inst_right if w_dir == 1 else inst_left), 0] | max) }}
+                                                {% endif %}
+                                              inst_left: >-
+                                                {% if w_dir == -1 and w_ext %}
+                                                  {{ inst_left + (1 if w_one else 0) }}
+                                                {% elif w_dir == -1 %}
+                                                  {{ [inst_left - w_n, 0] | max }}
+                                                {% else %}
+                                                  {{ inst_left }}
+                                                {% endif %}
+                                              inst_right: >-
+                                                {% if w_dir == 1 and w_ext %}
+                                                  {{ inst_right + (1 if w_one else 0) }}
+                                                {% elif w_dir == 1 %}
+                                                  {{ [inst_right - w_n, 0] | max }}
+                                                {% else %}
+                                                  {{ inst_right }}
+                                                {% endif %}
+                                              # fertig, wenn nach dem Senden nichts mehr kommt
+                                              done: "{{ w_id == 'timeout' and sent and pending == 0 }}"
+                                              sent: "{{ sent or w_id in ['sent', 'timeout'] }}"
+                                              target: "{{ [[target + delta * step, 0] | max, upper] | min }}"
+                                              pending: "{{ pending + delta }}"
+
+# Einzelmodus: Rasterschritte während eines laufenden Durchgangs werden von
+# dessen Zählschleife erfasst und dürfen keinen zweiten Lauf starten.
+mode: single
+max_exceeded: silent
+
+variables:
+  cfg:
+    ch1:
+      target: !input target_ch1
+      wheel: !input wheel_mode_ch1
+      click: !input click_mode_ch1
+      double: !input double_mode_ch1
+    ch2:
+      target: !input target_ch2
+      wheel: !input wheel_mode_ch2
+      click: !input click_mode_ch2
+      double: !input double_mode_ch2
+    ch3:
+      target: !input target_ch3
+      wheel: !input wheel_mode_ch3
+      click: !input click_mode_ch3
+      double: !input double_mode_ch3
+  eval_mode: !input eval_mode
+  clicks_per_turn: !input clicks_per_turn
+  light_turns: !input light_turns
+  light_turn_on: !input light_turn_on
+  light_turn_off: !input light_turn_off
+  light_transition: !input light_transition
+  media_turns: !input media_turns
+  volume_max_pct: !input volume_max_pct
+  media_turn_on: !input media_turn_on
+  media_turn_off: !input media_turn_off
+
+trigger_variables:
+  var_remote: !input remote
+  # Entitäten des Drehrads anhand der Endnummer finden (wie im Original)
+  var_button_ch1: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^event\..+[a-zA-Z]_3.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_scroll_left_ch1: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^event\..+[a-zA-Z]_2.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_scroll_right_ch1: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^event\..+[a-zA-Z]_1.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_scroll_left_ext_ch1: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^sensor\..+[a-zA-Z]_2.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_scroll_right_ext_ch1: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^sensor\..+[a-zA-Z]_1.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_button_ch2: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^event\..+[a-zA-Z]_6.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_scroll_left_ch2: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^event\..+[a-zA-Z]_5.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_scroll_right_ch2: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^event\..+[a-zA-Z]_4.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_scroll_left_ext_ch2: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^sensor\..+[a-zA-Z]_5.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_scroll_right_ext_ch2: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^sensor\..+[a-zA-Z]_4.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_button_ch3: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^event\..+[a-zA-Z]_9.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_scroll_left_ch3: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^event\..+[a-zA-Z]_8.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_scroll_right_ch3: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^event\..+[a-zA-Z]_7.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_scroll_left_ext_ch3: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^sensor\..+[a-zA-Z]_8.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
+  var_scroll_right_ext_ch3: >-
+    {% for item in device_entities(var_remote) %}
+    {% set match = item | regex_findall(find='^sensor\..+[a-zA-Z]_7.*$') %}
+    {% if (match | length) > 0 %}
+      {{ match[0] }}
+    {% endif %}
+    {% endfor %}
