@@ -16,7 +16,7 @@ blueprint:
     Für die Auswertung „Sofort“ müssen die 9 versteckten Sensor-Entitäten des
     Drehrads aktiviert sein (Gerät → Entitäten → „deaktivierte Entitäten“).
 
-    Version: 2026-11-11c – basiert auf „Ikea_bilresa_scroll_wheel“ von jhol-byte
+    Version: 2026-11-11d – basiert auf „Ikea_bilresa_scroll_wheel“ von jhol-byte
     (https://community.home-assistant.io/t/965365)
   domain: automation
   homeassistant:
@@ -675,12 +675,13 @@ action:
               scroll_direction: "{{ 'left' if trigger.id.startswith('left') else 'right' }}"
               scroll_clicks: >-
                 {% if not is_ext %}
-                  {{ trigger.event.data.new_state.attributes.totalNumberOfPressesCounted | int(1) }}
+                  {{ trigger.event.data.new_state.attributes.totalNumberOfPressesCounted | int(0) }}
                 {% else %}
                   1
                 {% endif %}
               first_delta: >-
                 {{ (scroll_clicks | int(1)) * (-1 if scroll_direction == 'left' else 1) }}
+              run_id: "{{ context.id }}"
               # bereits über die Sofort-Sensoren gezählte Schritte je Richtung
               inst_left: "{{ 1 if is_ext and scroll_direction == 'left' else 0 }}"
               inst_right: "{{ 1 if is_ext and scroll_direction == 'right' else 0 }}"
@@ -713,9 +714,9 @@ action:
                     then: !input wheel_action_ch3
 
               # ---- Licht: Helligkeit
-              # Ein Lauf sammelt alle Rasterschritte einer Drehbewegung und führt
-              # den Zielwert selbst mit. So gehen bei schnellem Drehen keine
-              # Schritte durch verzögerte Rückmeldungen der Lampe verloren.
+              # Ein Lauf begleitet die ganze Drehbewegung und führt den Zielwert
+              # selbst mit. Senden und Zählen laufen parallel, damit während eines
+              # Lampenbefehls keine Rasterschritte verloren gehen.
               - conditions: "{{ func == 'light' and lights | count > 0 }}"
                 sequence:
                   - variables:
@@ -731,106 +732,133 @@ action:
                            else (((b | max) / 255 * 100) if b else 100) }}
                       target: "{{ [[base + first_delta * step, 0] | max, 100] | min }}"
                       pending: "{{ first_delta }}"
-                      quiet: true
+                      sent: false
                       done: false
                   # ausgeschaltete Lampen nur durch Rechtsdrehen einschalten
                   - condition: template
                     value_template: >-
-                      {{ on_lights | count > 0 or (first_delta > 0 and light_turn_on) }}
+                      {{ first_delta != 0 and
+                         (on_lights | count > 0 or (first_delta > 0 and light_turn_on)) }}
                   - repeat:
-                      until: "{{ done }}"
+                      until: "{{ done or repeat.index >= 200 }}"
                       sequence:
-                        # senden, sobald 3 Schritte aufgelaufen sind oder das Rad kurz ruht
-                        - if: "{{ pending | abs >= 3 or (pending != 0 and quiet) }}"
-                          then:
-                            - choose:
-                                - conditions: "{{ target >= 1 }}"
-                                  sequence:
-                                    - action: light.turn_on
-                                      target:
-                                        entity_id: "{{ group }}"
-                                      data:
-                                        brightness_pct: "{{ target | round(0) | int }}"
-                                        transition: "{{ light_transition }}"
-                                - conditions: "{{ light_turn_off }}"
-                                  sequence:
-                                    - action: light.turn_off
-                                      target:
-                                        entity_id: "{{ group }}"
-                                      data:
-                                        transition: "{{ light_transition }}"
-                              default:
-                                - action: light.turn_on
-                                  target:
-                                    entity_id: "{{ group }}"
-                                  data:
-                                    brightness_pct: 1
-                                    transition: "{{ light_transition }}"
-                            - variables:
-                                pending: 0
-                        - wait_for_trigger:
-                            - trigger: event
-                              event_type: state_changed
-                              event_data:
-                                entity_id: "{{ left_ext_entity }}"
-                              id: left_ext
-                            - trigger: event
-                              event_type: state_changed
-                              event_data:
-                                entity_id: "{{ right_ext_entity }}"
-                              id: right_ext
-                            - trigger: event
-                              event_type: state_changed
-                              event_data:
-                                entity_id: "{{ left_evt_entity }}"
-                              id: left_evt
-                            - trigger: event
-                              event_type: state_changed
-                              event_data:
-                                entity_id: "{{ right_evt_entity }}"
-                              id: right_evt
-                          # kurz warten, solange noch etwas zu senden ist; länger, solange die
-                          # Summenmeldung des Rads zu bereits gezählten Sofort-Schritten aussteht
-                          timeout:
-                            milliseconds: "{{ 80 if pending != 0 else (2000 if (inst_left + inst_right) > 0 else 300) }}"
                         - variables:
-                            w_new: >-
-                              {{ none if wait.trigger is none else wait.trigger.event.data.new_state }}
-                            w_kind: >-
-                              {{ 'none' if wait.trigger is none or w_new is none
-                                 else ('ext' if wait.trigger.id.endswith('_ext') else 'evt') }}
-                            w_dir: "{{ 0 if w_kind == 'none' else (1 if wait.trigger.id.startswith('right') else -1) }}"
-                            # Sofort-Sensor: 1 Schritt. Ereignis: gemeldete Summe abzüglich der
-                            # Schritte, die über die Sofort-Sensoren schon gezählt wurden.
-                            delta: >-
-                              {% if w_kind == 'ext' %}
-                                {{ w_dir if w_new.state == '1' else 0 }}
-                              {% elif w_kind == 'evt' %}
-                                {% set n = w_new.attributes.totalNumberOfPressesCounted | int(0) %}
-                                {{ w_dir * ([n - (inst_right if w_dir == 1 else inst_left), 0] | max) }}
-                              {% else %}
-                                0
-                              {% endif %}
-                            inst_left: >-
-                              {% if w_dir == -1 and w_kind == 'ext' %}
-                                {{ inst_left + (1 if w_new.state == '1' else 0) }}
-                              {% elif w_dir == -1 and w_kind == 'evt' %}
-                                {{ [inst_left - (w_new.attributes.totalNumberOfPressesCounted | int(0)), 0] | max }}
-                              {% else %}
-                                {{ inst_left }}
-                              {% endif %}
-                            inst_right: >-
-                              {% if w_dir == 1 and w_kind == 'ext' %}
-                                {{ inst_right + (1 if w_new.state == '1' else 0) }}
-                              {% elif w_dir == 1 and w_kind == 'evt' %}
-                                {{ [inst_right - (w_new.attributes.totalNumberOfPressesCounted | int(0)), 0] | max }}
-                              {% else %}
-                                {{ inst_right }}
-                              {% endif %}
-                            done: "{{ wait.trigger is none and pending == 0 }}"
-                            quiet: "{{ wait.trigger is none }}"
-                            target: "{{ [[target + delta * step, 0] | max, upper] | min }}"
-                            pending: "{{ pending + delta }}"
+                            pending: 0
+                            sent: false
+                        - parallel:
+                            # A: aktuellen Zielwert senden und das Ende des Befehls melden
+                            - sequence:
+                                - choose:
+                                    - conditions: "{{ target >= 1 }}"
+                                      sequence:
+                                        - action: light.turn_on
+                                          continue_on_error: true
+                                          target:
+                                            entity_id: "{{ group }}"
+                                          data:
+                                            brightness_pct: "{{ target | round(0) | int }}"
+                                            transition: "{{ light_transition }}"
+                                    - conditions: "{{ light_turn_off }}"
+                                      sequence:
+                                        - action: light.turn_off
+                                          continue_on_error: true
+                                          target:
+                                            entity_id: "{{ group }}"
+                                          data:
+                                            transition: "{{ light_transition }}"
+                                  default:
+                                    - action: light.turn_on
+                                      continue_on_error: true
+                                      target:
+                                        entity_id: "{{ group }}"
+                                      data:
+                                        brightness_pct: 1
+                                        transition: "{{ light_transition }}"
+                                - delay:
+                                    milliseconds: 10
+                                - event: bilresa_drehrad_kompakt_sent
+                                  event_data:
+                                    run: "{{ run_id }}"
+                            # B: währenddessen weitere Rasterschritte zählen
+                            - sequence:
+                                - repeat:
+                                    until: "{{ done or (sent and pending != 0) or repeat.index >= 300 }}"
+                                    sequence:
+                                      - wait_for_trigger:
+                                          - trigger: event
+                                            event_type: state_changed
+                                            event_data:
+                                              entity_id: "{{ left_ext_entity }}"
+                                            id: left_ext
+                                          - trigger: event
+                                            event_type: state_changed
+                                            event_data:
+                                              entity_id: "{{ right_ext_entity }}"
+                                            id: right_ext
+                                          - trigger: event
+                                            event_type: state_changed
+                                            event_data:
+                                              entity_id: "{{ left_evt_entity }}"
+                                            id: left_evt
+                                          - trigger: event
+                                            event_type: state_changed
+                                            event_data:
+                                              entity_id: "{{ right_evt_entity }}"
+                                            id: right_evt
+                                          - trigger: event
+                                            event_type: bilresa_drehrad_kompakt_sent
+                                            event_data:
+                                              run: "{{ run_id }}"
+                                            id: sent
+                                        # solange der Befehl unterwegs ist lange warten; danach kurz auf weitere
+                                        # Schritte bzw. etwas länger auf die noch ausstehende Summenmeldung
+                                        timeout:
+                                          milliseconds: >-
+                                            {{ 5000 if not sent else (2000 if (inst_left + inst_right) > 0 else 500) }}
+                                      - variables:
+                                          w_id: "{{ 'timeout' if wait.trigger is none else wait.trigger.id }}"
+                                          w_dir: "{{ 1 if w_id.startswith('right') else (-1 if w_id.startswith('left') else 0) }}"
+                                          w_ext: "{{ w_id.endswith('_ext') }}"
+                                          # Sofort-Sensor meldet einen Rasterschritt
+                                          w_one: >-
+                                            {{ w_dir != 0 and wait.trigger.event.data.new_state is not none
+                                               and wait.trigger.event.data.new_state.state == '1' }}
+                                          # Summenmeldung des Rads
+                                          w_n: >-
+                                            {{ (wait.trigger.event.data.new_state.attributes.totalNumberOfPressesCounted | int(0))
+                                               if w_dir != 0 and not w_ext and wait.trigger.event.data.new_state is not none
+                                               else 0 }}
+                                          # Sofort-Sensor: 1 Schritt. Summenmeldung: Summe abzüglich der schon
+                                          # über die Sofort-Sensoren gezählten Schritte.
+                                          delta: >-
+                                            {% if w_dir == 0 %}
+                                              0
+                                            {% elif w_ext %}
+                                              {{ w_dir if w_one else 0 }}
+                                            {% else %}
+                                              {{ w_dir * ([w_n - (inst_right if w_dir == 1 else inst_left), 0] | max) }}
+                                            {% endif %}
+                                          inst_left: >-
+                                            {% if w_dir == -1 and w_ext %}
+                                              {{ inst_left + (1 if w_one else 0) }}
+                                            {% elif w_dir == -1 %}
+                                              {{ [inst_left - w_n, 0] | max }}
+                                            {% else %}
+                                              {{ inst_left }}
+                                            {% endif %}
+                                          inst_right: >-
+                                            {% if w_dir == 1 and w_ext %}
+                                              {{ inst_right + (1 if w_one else 0) }}
+                                            {% elif w_dir == 1 %}
+                                              {{ [inst_right - w_n, 0] | max }}
+                                            {% else %}
+                                              {{ inst_right }}
+                                            {% endif %}
+                                          # fertig, wenn nach dem Senden nichts mehr kommt
+                                          done: "{{ w_id == 'timeout' and sent and pending == 0 }}"
+                                          sent: "{{ sent or w_id in ['sent', 'timeout'] }}"
+                                          target: "{{ [[target + delta * step, 0] | max, upper] | min }}"
+                                          pending: "{{ pending + delta }}"
 
               # ---- Media: Lautstärke (gleiches Prinzip)
               - conditions: "{{ func == 'media' and players | count > 0 }}"
@@ -850,8 +878,10 @@ action:
                       upper: "{{ [volume_max_pct | float(40), base] | max }}"
                       target: "{{ [[base + first_delta * step, 0] | max, upper] | min }}"
                       pending: "{{ first_delta }}"
-                      quiet: true
+                      sent: false
                       done: false
+                  - condition: template
+                    value_template: "{{ first_delta != 0 }}"
                   - choose:
                       # alles aus -> durch Rechtsdrehen einschalten
                       - conditions: "{{ active | count == 0 }}"
@@ -864,101 +894,124 @@ action:
                                   entity_id: "{{ players }}"
                     default:
                       - repeat:
-                          until: "{{ done }}"
+                          until: "{{ done or repeat.index >= 200 }}"
                           sequence:
-                            - if: "{{ pending | abs >= 3 or (pending != 0 and quiet) }}"
-                              then:
-                                - choose:
-                                    - conditions: "{{ target >= 0.5 }}"
-                                      sequence:
+                            - variables:
+                                pending: 0
+                                sent: false
+                            - parallel:
+                                # A: aktuellen Zielwert senden und das Ende des Befehls melden
+                                - sequence:
+                                    - choose:
+                                        - conditions: "{{ target >= 0.5 }}"
+                                          sequence:
+                                            - action: media_player.volume_set
+                                              continue_on_error: true
+                                              target:
+                                                entity_id: "{{ active }}"
+                                              data:
+                                                volume_level: "{{ (target / 100) | round(3) }}"
+                                        - conditions: "{{ media_turn_off }}"
+                                          sequence:
+                                            - action: media_player.turn_off
+                                              continue_on_error: true
+                                              target:
+                                                entity_id: "{{ active }}"
+                                      default:
                                         - action: media_player.volume_set
                                           continue_on_error: true
                                           target:
                                             entity_id: "{{ active }}"
                                           data:
-                                            volume_level: "{{ (target / 100) | round(3) }}"
-                                    - conditions: "{{ media_turn_off }}"
-                                      sequence:
-                                        - action: media_player.turn_off
-                                          continue_on_error: true
-                                          target:
-                                            entity_id: "{{ active }}"
-                                        - stop: Media-Player ausgeschaltet
-                                  default:
-                                    - action: media_player.volume_set
-                                      continue_on_error: true
-                                      target:
-                                        entity_id: "{{ active }}"
-                                      data:
-                                        volume_level: 0
-                                - variables:
-                                    pending: 0
-                            - wait_for_trigger:
-                                - trigger: event
-                                  event_type: state_changed
-                                  event_data:
-                                    entity_id: "{{ left_ext_entity }}"
-                                  id: left_ext
-                                - trigger: event
-                                  event_type: state_changed
-                                  event_data:
-                                    entity_id: "{{ right_ext_entity }}"
-                                  id: right_ext
-                                - trigger: event
-                                  event_type: state_changed
-                                  event_data:
-                                    entity_id: "{{ left_evt_entity }}"
-                                  id: left_evt
-                                - trigger: event
-                                  event_type: state_changed
-                                  event_data:
-                                    entity_id: "{{ right_evt_entity }}"
-                                  id: right_evt
-                              # kurz warten, solange noch etwas zu senden ist; länger, solange die
-                              # Summenmeldung des Rads zu bereits gezählten Sofort-Schritten aussteht
-                              timeout:
-                                milliseconds: "{{ 80 if pending != 0 else (2000 if (inst_left + inst_right) > 0 else 300) }}"
-                            - variables:
-                                w_new: >-
-                                  {{ none if wait.trigger is none else wait.trigger.event.data.new_state }}
-                                w_kind: >-
-                                  {{ 'none' if wait.trigger is none or w_new is none
-                                     else ('ext' if wait.trigger.id.endswith('_ext') else 'evt') }}
-                                w_dir: "{{ 0 if w_kind == 'none' else (1 if wait.trigger.id.startswith('right') else -1) }}"
-                                # Sofort-Sensor: 1 Schritt. Ereignis: gemeldete Summe abzüglich der
-                                # Schritte, die über die Sofort-Sensoren schon gezählt wurden.
-                                delta: >-
-                                  {% if w_kind == 'ext' %}
-                                    {{ w_dir if w_new.state == '1' else 0 }}
-                                  {% elif w_kind == 'evt' %}
-                                    {% set n = w_new.attributes.totalNumberOfPressesCounted | int(0) %}
-                                    {{ w_dir * ([n - (inst_right if w_dir == 1 else inst_left), 0] | max) }}
-                                  {% else %}
-                                    0
-                                  {% endif %}
-                                inst_left: >-
-                                  {% if w_dir == -1 and w_kind == 'ext' %}
-                                    {{ inst_left + (1 if w_new.state == '1' else 0) }}
-                                  {% elif w_dir == -1 and w_kind == 'evt' %}
-                                    {{ [inst_left - (w_new.attributes.totalNumberOfPressesCounted | int(0)), 0] | max }}
-                                  {% else %}
-                                    {{ inst_left }}
-                                  {% endif %}
-                                inst_right: >-
-                                  {% if w_dir == 1 and w_kind == 'ext' %}
-                                    {{ inst_right + (1 if w_new.state == '1' else 0) }}
-                                  {% elif w_dir == 1 and w_kind == 'evt' %}
-                                    {{ [inst_right - (w_new.attributes.totalNumberOfPressesCounted | int(0)), 0] | max }}
-                                  {% else %}
-                                    {{ inst_right }}
-                                  {% endif %}
-                                done: "{{ wait.trigger is none and pending == 0 }}"
-                                quiet: "{{ wait.trigger is none }}"
-                                target: "{{ [[target + delta * step, 0] | max, upper] | min }}"
-                                pending: "{{ pending + delta }}"
+                                            volume_level: 0
+                                    - delay:
+                                        milliseconds: 10
+                                    - event: bilresa_drehrad_kompakt_sent
+                                      event_data:
+                                        run: "{{ run_id }}"
+                                # B: währenddessen weitere Rasterschritte zählen
+                                - sequence:
+                                    - repeat:
+                                        until: "{{ done or (sent and pending != 0) or repeat.index >= 300 }}"
+                                        sequence:
+                                          - wait_for_trigger:
+                                              - trigger: event
+                                                event_type: state_changed
+                                                event_data:
+                                                  entity_id: "{{ left_ext_entity }}"
+                                                id: left_ext
+                                              - trigger: event
+                                                event_type: state_changed
+                                                event_data:
+                                                  entity_id: "{{ right_ext_entity }}"
+                                                id: right_ext
+                                              - trigger: event
+                                                event_type: state_changed
+                                                event_data:
+                                                  entity_id: "{{ left_evt_entity }}"
+                                                id: left_evt
+                                              - trigger: event
+                                                event_type: state_changed
+                                                event_data:
+                                                  entity_id: "{{ right_evt_entity }}"
+                                                id: right_evt
+                                              - trigger: event
+                                                event_type: bilresa_drehrad_kompakt_sent
+                                                event_data:
+                                                  run: "{{ run_id }}"
+                                                id: sent
+                                            # solange der Befehl unterwegs ist lange warten; danach kurz auf weitere
+                                            # Schritte bzw. etwas länger auf die noch ausstehende Summenmeldung
+                                            timeout:
+                                              milliseconds: >-
+                                                {{ 5000 if not sent else (2000 if (inst_left + inst_right) > 0 else 500) }}
+                                          - variables:
+                                              w_id: "{{ 'timeout' if wait.trigger is none else wait.trigger.id }}"
+                                              w_dir: "{{ 1 if w_id.startswith('right') else (-1 if w_id.startswith('left') else 0) }}"
+                                              w_ext: "{{ w_id.endswith('_ext') }}"
+                                              # Sofort-Sensor meldet einen Rasterschritt
+                                              w_one: >-
+                                                {{ w_dir != 0 and wait.trigger.event.data.new_state is not none
+                                                   and wait.trigger.event.data.new_state.state == '1' }}
+                                              # Summenmeldung des Rads
+                                              w_n: >-
+                                                {{ (wait.trigger.event.data.new_state.attributes.totalNumberOfPressesCounted | int(0))
+                                                   if w_dir != 0 and not w_ext and wait.trigger.event.data.new_state is not none
+                                                   else 0 }}
+                                              # Sofort-Sensor: 1 Schritt. Summenmeldung: Summe abzüglich der schon
+                                              # über die Sofort-Sensoren gezählten Schritte.
+                                              delta: >-
+                                                {% if w_dir == 0 %}
+                                                  0
+                                                {% elif w_ext %}
+                                                  {{ w_dir if w_one else 0 }}
+                                                {% else %}
+                                                  {{ w_dir * ([w_n - (inst_right if w_dir == 1 else inst_left), 0] | max) }}
+                                                {% endif %}
+                                              inst_left: >-
+                                                {% if w_dir == -1 and w_ext %}
+                                                  {{ inst_left + (1 if w_one else 0) }}
+                                                {% elif w_dir == -1 %}
+                                                  {{ [inst_left - w_n, 0] | max }}
+                                                {% else %}
+                                                  {{ inst_left }}
+                                                {% endif %}
+                                              inst_right: >-
+                                                {% if w_dir == 1 and w_ext %}
+                                                  {{ inst_right + (1 if w_one else 0) }}
+                                                {% elif w_dir == 1 %}
+                                                  {{ [inst_right - w_n, 0] | max }}
+                                                {% else %}
+                                                  {{ inst_right }}
+                                                {% endif %}
+                                              # fertig, wenn nach dem Senden nichts mehr kommt
+                                              done: "{{ w_id == 'timeout' and sent and pending == 0 }}"
+                                              sent: "{{ sent or w_id in ['sent', 'timeout'] }}"
+                                              target: "{{ [[target + delta * step, 0] | max, upper] | min }}"
+                                              pending: "{{ pending + delta }}"
 
 # Einzelmodus: Rasterschritte während eines laufenden Durchgangs werden von
-# dessen Warteschleife gezählt und dürfen keinen zweiten Lauf starten.
+# dessen Zählschleife erfasst und dürfen keinen zweiten Lauf starten.
 mode: single
 max_exceeded: silent
 

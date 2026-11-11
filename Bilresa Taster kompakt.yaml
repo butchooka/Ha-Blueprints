@@ -18,7 +18,7 @@ blueprint:
     Halten regelt die Lautstärke bis zur eingestellten Obergrenze.
     Das Loslassen der Taste beendet nur das Dimmen und löst keine Aktion aus.
 
-    Version: 2026-11-11b
+    Version: 2026-11-11d
   domain: automation
   homeassistant:
     min_version: 2025.4.0
@@ -309,7 +309,10 @@ action:
               - conditions: "{{ func == 'light' and lights | count > 0 }}"
                 sequence:
                   - variables:
-                      step: "{{ 100 * 0.25 / (ramp_time | float(4)) }}"
+                      # Änderung pro Sekunde; der Zielwert folgt der Haltedauer, auch
+                      # wenn ein Lampenbefehl länger braucht
+                      rate: "{{ 100 / (ramp_time | float(4)) }}"
+                      t0: "{{ as_timestamp(now()) }}"
                       on_lights: "{{ lights | select('is_state', 'on') | list }}"
                       group: "{{ on_lights if on_lights | count > 0 else lights }}"
                       # Startwert: hellste eingeschaltete Lampe in Prozent (aus = 0)
@@ -318,6 +321,7 @@ action:
                                    | select('number') | list %}
                         {{ 0 if on_lights | count == 0
                            else (((b | max) / 255 * 100) if b else 100) }}
+                      start: "{{ level }}"
                       finished: false
                   # ausgeschaltete Lampen nur mit der Taste AN einschalten
                   - condition: template
@@ -329,7 +333,9 @@ action:
                            and state_attr(button, 'event_type') == 'long_press' }}
                       sequence:
                         - variables:
-                            level: "{{ [[level + (step if is_on else -step), 0] | max, 100] | min }}"
+                            level: >-
+                              {{ [[start + (1 if is_on else -1) * rate
+                                   * (as_timestamp(now()) - t0 + 0.25), 0] | max, 100] | min }}
                         - choose:
                             - conditions: "{{ level >= 1 }}"
                               sequence:
@@ -361,7 +367,8 @@ action:
               - conditions: "{{ func == 'media' and players | count > 0 }}"
                 sequence:
                   - variables:
-                      step: "{{ (volume_max_pct | float(40)) * 0.25 / (ramp_time | float(4)) }}"
+                      rate: "{{ (volume_max_pct | float(40)) / (ramp_time | float(4)) }}"
+                      t0: "{{ as_timestamp(now()) }}"
                       active: >-
                         {{ players | reject('is_state', ['off', 'standby', 'unavailable', 'unknown']) | list }}
                       # Startwert: lautester aktiver Player in Prozent
@@ -371,6 +378,7 @@ action:
                         {{ (v | max) * 100 if v else 0 }}
                       # nie lauter als das Maximum (eine höhere Ausgangslautstärke bleibt)
                       upper: "{{ [volume_max_pct | float(40), level] | max }}"
+                      start: "{{ level }}"
                       finished: false
                   - choose:
                       # alles aus -> mit der Taste AN einschalten
@@ -389,7 +397,9 @@ action:
                                and state_attr(button, 'event_type') == 'long_press' }}
                           sequence:
                             - variables:
-                                level: "{{ [[level + (step if is_on else -step), 0] | max, upper] | min }}"
+                                level: >-
+                                  {{ [[start + (1 if is_on else -1) * rate
+                                       * (as_timestamp(now()) - t0 + 0.25), 0] | max, upper] | min }}
                             - choose:
                                 - conditions: "{{ level >= 0.5 }}"
                                   sequence:
