@@ -1,0 +1,449 @@
+---
+blueprint:
+  name: Bilresa Taster kompakt
+  description: |
+    Kompakter Blueprint für den **IKEA BILRESA Doppeltaster** (Matter).
+
+    Es wird ein Ziel gewählt (Lampe, Media-Player, Gerät oder Bereich).
+    Enthält das Ziel Lampen und Media-Player, haben Lampen Vorrang.
+
+    | | Taste AN | Taste AUS |
+    |---|---|---|
+    | Einfachklick | Licht gedimmt und warm (25 %) | Licht schnell aus |
+    | Doppelklick | Licht hell und kälter (75 %) | Licht langsam aus (10 s) |
+    | Dreifachklick | frei belegbar | frei belegbar |
+    | Halten | heller / lauter | dunkler / leiser |
+
+    Bei einem Media-Player schalten Einfach- und Doppelklick ein bzw. aus,
+    Halten regelt die Lautstärke bis zur eingestellten Obergrenze.
+    Das Loslassen der Taste beendet nur das Dimmen und löst keine Aktion aus.
+
+    Version: 2026-11-11
+  domain: automation
+  homeassistant:
+    min_version: 2024.10.0
+
+  input:
+    button_on:
+      name: Taste AN
+      description: Ereignis-Entität der Taste zum Einschalten / Heller (meist „Taste 1“).
+      selector:
+        entity:
+          filter:
+            - domain: event
+              integration: matter
+    button_off:
+      name: Taste AUS
+      description: Ereignis-Entität der Taste zum Ausschalten / Dunkler (meist „Taste 2“).
+      selector:
+        entity:
+          filter:
+            - domain: event
+              integration: matter
+    target:
+      name: Ziel
+      description: Lampe(n), Media-Player, Gerät oder Bereich, das der Taster steuert.
+      default: {}
+      selector:
+        target:
+          entity:
+            - domain:
+                - light
+                - media_player
+    function:
+      name: Funktion
+      description: >-
+        „Automatisch“ wählt nach dem Ziel: Lampe → Licht,
+        Media-Player → Media.
+      default: auto
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - label: Automatisch (nach Ziel)
+              value: auto
+            - label: Licht
+              value: light
+            - label: Media
+              value: media
+    triple_action_on:
+      name: "Taste AN: Dreifachklick"
+      description: Frei belegbare Aktion.
+      default: []
+      selector:
+        action: {}
+    triple_action_off:
+      name: "Taste AUS: Dreifachklick"
+      description: Frei belegbare Aktion.
+      default: []
+      selector:
+        action: {}
+
+    # ------------------------------------------------------ Licht-Vorgaben
+    light_section:
+      name: Licht – Vorgaben für Klicks
+      icon: mdi:lightbulb-on-outline
+      collapsed: true
+      input:
+        single_brightness:
+          name: "Einfachklick AN: Helligkeit"
+          default: 25
+          selector:
+            number:
+              min: 1
+              max: 100
+              unit_of_measurement: "%"
+              mode: slider
+        single_kelvin:
+          name: "Einfachklick AN: Farbtemperatur"
+          description: Niedrig = warm, hoch = kalt.
+          default: 2700
+          selector:
+            color_temp:
+              unit: kelvin
+              min: 2000
+              max: 6500
+        double_brightness:
+          name: "Doppelklick AN: Helligkeit"
+          default: 75
+          selector:
+            number:
+              min: 1
+              max: 100
+              unit_of_measurement: "%"
+              mode: slider
+        double_kelvin:
+          name: "Doppelklick AN: Farbtemperatur"
+          description: Niedrig = warm, hoch = kalt.
+          default: 4000
+          selector:
+            color_temp:
+              unit: kelvin
+              min: 2000
+              max: 6500
+        fast_off:
+          name: "Einfachklick AUS: Ausschaltdauer (schnell)"
+          default: 0.5
+          selector:
+            number:
+              min: 0
+              max: 10
+              step: 0.1
+              unit_of_measurement: s
+              mode: box
+        slow_off:
+          name: "Doppelklick AUS: Ausschaltdauer (langsam)"
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 300
+              step: 1
+              unit_of_measurement: s
+              mode: box
+
+    # --------------------------------------------------------------- Halten
+    hold_section:
+      name: Halten – Helligkeit und Lautstärke
+      icon: mdi:gesture-tap-hold
+      collapsed: true
+      input:
+        ramp_time:
+          name: Dauer für den vollen Bereich
+          description: >-
+            So lange dauert es beim Halten von 0 % bis 100 % Helligkeit
+            bzw. von 0 bis zur maximalen Lautstärke.
+          default: 4
+          selector:
+            number:
+              min: 1
+              max: 20
+              step: 0.5
+              unit_of_measurement: s
+              mode: box
+        volume_max_pct:
+          name: Maximale Lautstärke
+          description: Lauter als dieser Wert stellt der Taster nicht ein.
+          default: 40
+          selector:
+            number:
+              min: 5
+              max: 100
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
+        hold_turn_on:
+          name: Halten schaltet ein
+          description: Halten der Taste AN schaltet ein ausgeschaltetes Ziel (dunkel beginnend) ein.
+          default: true
+          selector:
+            boolean:
+        hold_turn_off:
+          name: Halten schaltet aus
+          description: Halten der Taste AUS bis ganz unten schaltet das Ziel aus.
+          default: true
+          selector:
+            boolean:
+
+trigger:
+  - trigger: state
+    entity_id: !input button_on
+    id: "on"
+  - trigger: state
+    entity_id: !input button_off
+    id: "off"
+
+condition:
+  - condition: template
+    value_template: >-
+      {{ trigger.from_state is not none
+         and trigger.to_state is not none
+         and trigger.from_state.state != 'unavailable'
+         and trigger.to_state.state not in ['unavailable', 'unknown'] }}
+
+action:
+  - variables:
+      is_on: "{{ trigger.id == 'on' }}"
+      button: "{{ trigger.entity_id }}"
+      event_type: "{{ trigger.to_state.attributes.event_type | default('') }}"
+      # Ziel (Entität, Gerät, Bereich, Etage, Label) in Entitäten auflösen
+      entities: >-
+        {% set t = target %}
+        {% set ns = namespace(e=[]) %}
+        {% if t is mapping %}
+          {% for key in ['entity_id', 'device_id', 'area_id', 'floor_id', 'label_id'] %}
+            {% set x = t.get(key) or [] %}
+            {% for i in ([x] if x is string else x) %}
+              {% if key == 'entity_id' %}
+                {% set ns.e = ns.e + [i] %}
+              {% elif key == 'device_id' %}
+                {% set ns.e = ns.e + device_entities(i) | list %}
+              {% elif key == 'area_id' %}
+                {% set ns.e = ns.e + area_entities(i) | list %}
+              {% elif key == 'floor_id' %}
+                {% for a in floor_areas(i) %}
+                  {% set ns.e = ns.e + area_entities(a) | list %}
+                {% endfor %}
+              {% else %}
+                {% set ns.e = ns.e + label_entities(i) | list %}
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+        {% endif %}
+        {{ ns.e | unique | list }}
+      lights: >-
+        {{ entities | select('match', 'light\.') | list }}
+      players: >-
+        {{ entities | select('match', 'media_player\.') | list }}
+      # Lampen haben Vorrang, wenn das Ziel beides enthält
+      func: >-
+        {% if function in ['light', 'media'] %}
+          {{ function }}
+        {% elif lights | count > 0 %}
+          light
+        {% elif players | count > 0 %}
+          media
+        {% else %}
+          none
+        {% endif %}
+
+  - choose:
+      # ---------------------------------------- Einfach- und Doppelklick AN
+      - conditions: "{{ is_on and event_type in ['multi_press_1', 'multi_press_2'] }}"
+        sequence:
+          - choose:
+              - conditions: "{{ func == 'light' and lights | count > 0 }}"
+                sequence:
+                  - action: light.turn_on
+                    target:
+                      entity_id: "{{ lights }}"
+                    data:
+                      brightness_pct: >-
+                        {{ (single_brightness if event_type == 'multi_press_1'
+                            else double_brightness) | int }}
+                      color_temp_kelvin: >-
+                        {{ (single_kelvin if event_type == 'multi_press_1'
+                            else double_kelvin) | int }}
+                      transition: 0.5
+              - conditions: "{{ func == 'media' and players | count > 0 }}"
+                sequence:
+                  - action: media_player.turn_on
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ players }}"
+
+      # --------------------------------------- Einfach- und Doppelklick AUS
+      - conditions: "{{ not is_on and event_type in ['multi_press_1', 'multi_press_2'] }}"
+        sequence:
+          - choose:
+              - conditions: "{{ func == 'light' and lights | count > 0 }}"
+                sequence:
+                  - action: light.turn_off
+                    target:
+                      entity_id: "{{ lights }}"
+                    data:
+                      transition: >-
+                        {{ (fast_off if event_type == 'multi_press_1'
+                            else slow_off) | float(0) }}
+              - conditions: "{{ func == 'media' and players | count > 0 }}"
+                sequence:
+                  - action: media_player.turn_off
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ players }}"
+
+      # ------------------------------------------------------ Dreifachklick
+      - conditions: "{{ event_type == 'multi_press_3' }}"
+        sequence:
+          - if: "{{ is_on }}"
+            then: !input triple_action_on
+            else: !input triple_action_off
+
+      # ------------------------------------- Halten: Helligkeit / Lautstärke
+      # Läuft, solange die Taste gehalten wird. Das Loslassen (long_release)
+      # startet die Automation neu und beendet damit die Schleife.
+      - conditions: "{{ event_type == 'long_press' }}"
+        sequence:
+          - repeat:
+              while: "{{ repeat.index <= 100 and state_attr(button, 'event_type') == 'long_press' }}"
+              sequence:
+                - choose:
+                    # ---- Licht
+                    - conditions: "{{ func == 'light' and lights | count > 0 }}"
+                      sequence:
+                        - variables:
+                            step: "{{ (100 * 0.25 / (ramp_time | float(4))) | round(1) }}"
+                            on_lights: "{{ lights | select('is_state', 'on') | list }}"
+                            current: >-
+                              {% set b = on_lights | map('state_attr', 'brightness')
+                                         | select('number') | list %}
+                              {{ ((b | max) / 255 * 100) | round(1) if b else 100 }}
+                        - choose:
+                            # AN halten, alles aus -> dunkel einschalten
+                            - conditions: "{{ is_on and on_lights | count == 0 }}"
+                              sequence:
+                                - if: "{{ hold_turn_on }}"
+                                  then:
+                                    - action: light.turn_on
+                                      target:
+                                        entity_id: "{{ lights }}"
+                                      data:
+                                        brightness_pct: "{{ [step | round(0) | int, 1] | max }}"
+                                        transition: 0.25
+                            # AN halten -> heller
+                            - conditions: "{{ is_on }}"
+                              sequence:
+                                - action: light.turn_on
+                                  target:
+                                    entity_id: "{{ on_lights }}"
+                                  data:
+                                    brightness_step_pct: "{{ step }}"
+                                    transition: 0.25
+                            # AUS halten, ganz unten -> aus (oder 1 %)
+                            - conditions: "{{ on_lights | count > 0 and current - step < 1 }}"
+                              sequence:
+                                - if: "{{ hold_turn_off }}"
+                                  then:
+                                    - action: light.turn_off
+                                      target:
+                                        entity_id: "{{ on_lights }}"
+                                      data:
+                                        transition: 0.25
+                                  else:
+                                    - action: light.turn_on
+                                      target:
+                                        entity_id: "{{ on_lights }}"
+                                      data:
+                                        brightness_pct: 1
+                                        transition: 0.25
+                            # AUS halten -> dunkler
+                            - conditions: "{{ on_lights | count > 0 }}"
+                              sequence:
+                                - action: light.turn_on
+                                  target:
+                                    entity_id: "{{ on_lights }}"
+                                  data:
+                                    brightness_step_pct: "{{ -1 * step }}"
+                                    transition: 0.25
+
+                    # ---- Media
+                    - conditions: "{{ func == 'media' and players | count > 0 }}"
+                      sequence:
+                        - variables:
+                            vol_max: "{{ volume_max_pct | float(40) }}"
+                            vol_step: "{{ (volume_max_pct | float(40)) * 0.25 / (ramp_time | float(4)) }}"
+                            active: >-
+                              {{ players | reject('is_state', ['off', 'standby', 'unavailable', 'unknown']) | list }}
+                        - choose:
+                            # AN halten, alles aus -> einschalten
+                            - conditions: "{{ is_on and active | count == 0 }}"
+                              sequence:
+                                - if: "{{ hold_turn_on }}"
+                                  then:
+                                    - action: media_player.turn_on
+                                      continue_on_error: true
+                                      target:
+                                        entity_id: "{{ players }}"
+                            - conditions: "{{ active | count > 0 }}"
+                              sequence:
+                                - repeat:
+                                    for_each: "{{ active }}"
+                                    sequence:
+                                      - variables:
+                                          vol: "{{ (state_attr(repeat.item, 'volume_level') | float(0)) * 100 }}"
+                                      - choose:
+                                          # AN halten -> lauter, begrenzt auf Maximum
+                                          - conditions: "{{ is_on }}"
+                                            sequence:
+                                              - if: "{{ vol < vol_max }}"
+                                                then:
+                                                  - action: media_player.volume_set
+                                                    continue_on_error: true
+                                                    target:
+                                                      entity_id: "{{ repeat.item }}"
+                                                    data:
+                                                      volume_level: "{{ ([vol + vol_step, vol_max] | min / 100) | round(3) }}"
+                                          # AUS halten, unter 0 -> aus (oder stumm auf 0)
+                                          - conditions: "{{ vol - vol_step < 0.5 }}"
+                                            sequence:
+                                              - if: "{{ hold_turn_off }}"
+                                                then:
+                                                  - action: media_player.turn_off
+                                                    continue_on_error: true
+                                                    target:
+                                                      entity_id: "{{ repeat.item }}"
+                                                else:
+                                                  - action: media_player.volume_set
+                                                    continue_on_error: true
+                                                    target:
+                                                      entity_id: "{{ repeat.item }}"
+                                                    data:
+                                                      volume_level: 0
+                                        # AUS halten -> leiser
+                                        default:
+                                          - action: media_player.volume_set
+                                            continue_on_error: true
+                                            target:
+                                              entity_id: "{{ repeat.item }}"
+                                            data:
+                                              volume_level: "{{ ((vol - vol_step) / 100) | round(3) }}"
+                - delay: 0.25
+
+# Neustart: jedes neue Ereignis (auch das Loslassen) beendet eine laufende
+# Dimm-Schleife sofort.
+mode: restart
+max_exceeded: silent
+
+variables:
+  target: !input target
+  function: !input function
+  single_brightness: !input single_brightness
+  single_kelvin: !input single_kelvin
+  double_brightness: !input double_brightness
+  double_kelvin: !input double_kelvin
+  fast_off: !input fast_off
+  slow_off: !input slow_off
+  ramp_time: !input ramp_time
+  volume_max_pct: !input volume_max_pct
+  hold_turn_on: !input hold_turn_on
+  hold_turn_off: !input hold_turn_off
