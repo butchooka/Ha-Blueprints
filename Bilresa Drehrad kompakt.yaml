@@ -16,11 +16,11 @@ blueprint:
     Für die Auswertung „Sofort“ müssen die 9 versteckten Sensor-Entitäten des
     Drehrads aktiviert sein (Gerät → Entitäten → „deaktivierte Entitäten“).
 
-    Version: 2026-11-11 – basiert auf „Ikea_bilresa_scroll_wheel“ von jhol-byte
+    Version: 2026-11-11b – basiert auf „Ikea_bilresa_scroll_wheel“ von jhol-byte
     (https://community.home-assistant.io/t/965365)
   domain: automation
   homeassistant:
-    min_version: 2024.10.0
+    min_version: 2025.4.0
 
   input:
     remote:
@@ -677,6 +677,21 @@ action:
                 {% else %}
                   1
                 {% endif %}
+              first_delta: >-
+                {{ (scroll_clicks | int(1)) * (-1 if scroll_direction == 'left' else 1) }}
+              # Entitäten, auf die während des Drehens weiter gewartet wird
+              left_entity: >-
+                {% if eval_mode == 'instant' %}
+                  {{ {'ch1': var_scroll_left_ext_ch1, 'ch2': var_scroll_left_ext_ch2, 'ch3': var_scroll_left_ext_ch3}[channel] }}
+                {% else %}
+                  {{ {'ch1': var_scroll_left_ch1, 'ch2': var_scroll_left_ch2, 'ch3': var_scroll_left_ch3}[channel] }}
+                {% endif %}
+              right_entity: >-
+                {% if eval_mode == 'instant' %}
+                  {{ {'ch1': var_scroll_right_ext_ch1, 'ch2': var_scroll_right_ext_ch2, 'ch3': var_scroll_right_ext_ch3}[channel] }}
+                {% else %}
+                  {{ {'ch1': var_scroll_right_ch1, 'ch2': var_scroll_right_ch2, 'ch3': var_scroll_right_ch3}[channel] }}
+                {% endif %}
           - choose:
               # ---- eigene Dreh-Aktion
               - conditions: "{{ wheel_mode == 'custom' }}"
@@ -689,133 +704,183 @@ action:
                     then: !input wheel_action_ch3
 
               # ---- Licht: Helligkeit
+              # Ein Lauf sammelt alle Rasterschritte einer Drehbewegung und führt
+              # den Zielwert selbst mit. So gehen bei schnellem Drehen keine
+              # Schritte durch verzögerte Rückmeldungen der Lampe verloren.
               - conditions: "{{ func == 'light' and lights | count > 0 }}"
                 sequence:
                   - variables:
-                      step: >-
-                        {{ (100 / ((light_turns | int(1)) * (clicks_per_turn | int(18)))
-                            * (scroll_clicks | int(1))) | round(1) }}
+                      step: "{{ 100 / ((light_turns | int(1)) * (clicks_per_turn | int(18))) }}"
+                      upper: 100
                       on_lights: "{{ lights | select('is_state', 'on') | list }}"
-                      # hellste eingeschaltete Lampe in Prozent
-                      current: >-
+                      group: "{{ on_lights if on_lights | count > 0 else lights }}"
+                      # Startwert: hellste eingeschaltete Lampe in Prozent (aus = 0)
+                      base: >-
                         {% set b = on_lights | map('state_attr', 'brightness')
                                    | select('number') | list %}
-                        {{ ((b | max) / 255 * 100) | round(1) if b else 100 }}
-                  - choose:
-                      # rechts, alles aus -> dunkel einschalten
-                      - conditions: "{{ scroll_direction == 'right' and on_lights | count == 0 }}"
-                        sequence:
-                          - if: "{{ light_turn_on }}"
-                            then:
-                              - action: light.turn_on
-                                target:
-                                  entity_id: "{{ lights }}"
-                                data:
-                                  brightness_pct: "{{ [step | round(0) | int, 1] | max }}"
-                                  transition: "{{ light_transition }}"
-                      # rechts -> heller
-                      - conditions: "{{ scroll_direction == 'right' }}"
-                        sequence:
-                          - action: light.turn_on
-                            target:
-                              entity_id: "{{ on_lights }}"
-                            data:
-                              brightness_step_pct: "{{ step }}"
-                              transition: "{{ light_transition }}"
-                      # links, unterhalb der kleinsten Helligkeit -> aus (oder 1 %)
-                      - conditions: "{{ on_lights | count > 0 and current - step < 1 }}"
-                        sequence:
-                          - if: "{{ light_turn_off }}"
-                            then:
-                              - action: light.turn_off
-                                target:
-                                  entity_id: "{{ on_lights }}"
-                                data:
-                                  transition: "{{ light_transition }}"
-                            else:
-                              - action: light.turn_on
-                                target:
-                                  entity_id: "{{ on_lights }}"
-                                data:
-                                  brightness_pct: 1
-                                  transition: "{{ light_transition }}"
-                      # links -> dunkler
-                      - conditions: "{{ on_lights | count > 0 }}"
-                        sequence:
-                          - action: light.turn_on
-                            target:
-                              entity_id: "{{ on_lights }}"
-                            data:
-                              brightness_step_pct: "{{ -1 * step }}"
-                              transition: "{{ light_transition }}"
+                        {{ 0 if on_lights | count == 0
+                           else (((b | max) / 255 * 100) if b else 100) }}
+                      target: "{{ [[base + first_delta * step, 0] | max, 100] | min }}"
+                      pending: "{{ first_delta }}"
+                      quiet: true
+                      done: false
+                  # ausgeschaltete Lampen nur durch Rechtsdrehen einschalten
+                  - condition: template
+                    value_template: >-
+                      {{ on_lights | count > 0 or (first_delta > 0 and light_turn_on) }}
+                  - repeat:
+                      until: "{{ done }}"
+                      sequence:
+                        # senden, sobald 3 Schritte aufgelaufen sind oder das Rad kurz ruht
+                        - if: "{{ pending | abs >= 3 or (pending != 0 and quiet) }}"
+                          then:
+                            - choose:
+                                - conditions: "{{ target >= 1 }}"
+                                  sequence:
+                                    - action: light.turn_on
+                                      target:
+                                        entity_id: "{{ group }}"
+                                      data:
+                                        brightness_pct: "{{ target | round(0) | int }}"
+                                        transition: "{{ light_transition }}"
+                                - conditions: "{{ light_turn_off }}"
+                                  sequence:
+                                    - action: light.turn_off
+                                      target:
+                                        entity_id: "{{ group }}"
+                                      data:
+                                        transition: "{{ light_transition }}"
+                              default:
+                                - action: light.turn_on
+                                  target:
+                                    entity_id: "{{ group }}"
+                                  data:
+                                    brightness_pct: 1
+                                    transition: "{{ light_transition }}"
+                            - variables:
+                                pending: 0
+                        - wait_for_trigger:
+                            - trigger: event
+                              event_type: state_changed
+                              event_data:
+                                entity_id: "{{ left_entity }}"
+                              id: left
+                            - trigger: event
+                              event_type: state_changed
+                              event_data:
+                                entity_id: "{{ right_entity }}"
+                              id: right
+                          timeout:
+                            milliseconds: "{{ 80 if pending != 0 else 400 }}"
+                        - variables:
+                            delta: >-
+                              {% if wait.trigger is none or wait.trigger.event.data.new_state is none %}
+                                0
+                              {% elif eval_mode == 'instant' %}
+                                {{ (1 if wait.trigger.id == 'right' else -1)
+                                   if wait.trigger.event.data.new_state.state == '1' else 0 }}
+                              {% else %}
+                                {{ (wait.trigger.event.data.new_state.attributes.totalNumberOfPressesCounted | int(1))
+                                   * (1 if wait.trigger.id == 'right' else -1) }}
+                              {% endif %}
+                            done: "{{ wait.trigger is none and pending == 0 }}"
+                            quiet: "{{ wait.trigger is none }}"
+                            target: "{{ [[target + delta * step, 0] | max, upper] | min }}"
+                            pending: "{{ pending + delta }}"
 
-              # ---- Media: Lautstärke
+              # ---- Media: Lautstärke (gleiches Prinzip)
               - conditions: "{{ func == 'media' and players | count > 0 }}"
                 sequence:
                   - variables:
-                      vol_max: "{{ volume_max_pct | float(40) }}"
-                      vol_step: >-
+                      step: >-
                         {{ (volume_max_pct | float(40))
-                           / ((media_turns | int(1)) * (clicks_per_turn | int(18)))
-                           * (scroll_clicks | int(1)) }}
+                           / ((media_turns | int(1)) * (clicks_per_turn | int(18))) }}
                       active: >-
                         {{ players | reject('is_state', ['off', 'standby', 'unavailable', 'unknown']) | list }}
+                      # Startwert: lautester aktiver Player in Prozent
+                      base: >-
+                        {% set v = active | map('state_attr', 'volume_level')
+                                   | select('number') | list %}
+                        {{ (v | max) * 100 if v else 0 }}
+                      # nie lauter als das Maximum (eine höhere Ausgangslautstärke bleibt)
+                      upper: "{{ [volume_max_pct | float(40), base] | max }}"
+                      target: "{{ [[base + first_delta * step, 0] | max, upper] | min }}"
+                      pending: "{{ first_delta }}"
+                      quiet: true
+                      done: false
                   - choose:
-                      # rechts, alles aus -> einschalten
-                      - conditions: "{{ scroll_direction == 'right' and active | count == 0 }}"
+                      # alles aus -> durch Rechtsdrehen einschalten
+                      - conditions: "{{ active | count == 0 }}"
                         sequence:
-                          - if: "{{ media_turn_on }}"
+                          - if: "{{ first_delta > 0 and media_turn_on }}"
                             then:
                               - action: media_player.turn_on
                                 continue_on_error: true
                                 target:
                                   entity_id: "{{ players }}"
-                      - conditions: "{{ active | count > 0 }}"
-                        sequence:
-                          - repeat:
-                              for_each: "{{ active }}"
-                              sequence:
-                                - variables:
-                                    vol: "{{ (state_attr(repeat.item, 'volume_level') | float(0)) * 100 }}"
+                    default:
+                      - repeat:
+                          until: "{{ done }}"
+                          sequence:
+                            - if: "{{ pending | abs >= 3 or (pending != 0 and quiet) }}"
+                              then:
                                 - choose:
-                                    # rechts -> lauter, begrenzt auf Maximum
-                                    - conditions: "{{ scroll_direction == 'right' }}"
+                                    - conditions: "{{ target >= 0.5 }}"
                                       sequence:
-                                        - if: "{{ vol < vol_max }}"
-                                          then:
-                                            - action: media_player.volume_set
-                                              continue_on_error: true
-                                              target:
-                                                entity_id: "{{ repeat.item }}"
-                                              data:
-                                                volume_level: "{{ ([vol + vol_step, vol_max] | min / 100) | round(3) }}"
-                                    # links, unter 0 -> aus (oder stumm auf 0)
-                                    - conditions: "{{ vol - vol_step < 0.5 }}"
+                                        - action: media_player.volume_set
+                                          continue_on_error: true
+                                          target:
+                                            entity_id: "{{ active }}"
+                                          data:
+                                            volume_level: "{{ (target / 100) | round(3) }}"
+                                    - conditions: "{{ media_turn_off }}"
                                       sequence:
-                                        - if: "{{ media_turn_off }}"
-                                          then:
-                                            - action: media_player.turn_off
-                                              continue_on_error: true
-                                              target:
-                                                entity_id: "{{ repeat.item }}"
-                                          else:
-                                            - action: media_player.volume_set
-                                              continue_on_error: true
-                                              target:
-                                                entity_id: "{{ repeat.item }}"
-                                              data:
-                                                volume_level: 0
-                                  # links -> leiser
+                                        - action: media_player.turn_off
+                                          continue_on_error: true
+                                          target:
+                                            entity_id: "{{ active }}"
+                                        - stop: Media-Player ausgeschaltet
                                   default:
                                     - action: media_player.volume_set
                                       continue_on_error: true
                                       target:
-                                        entity_id: "{{ repeat.item }}"
+                                        entity_id: "{{ active }}"
                                       data:
-                                        volume_level: "{{ ((vol - vol_step) / 100) | round(3) }}"
+                                        volume_level: 0
+                                - variables:
+                                    pending: 0
+                            - wait_for_trigger:
+                                - trigger: event
+                                  event_type: state_changed
+                                  event_data:
+                                    entity_id: "{{ left_entity }}"
+                                  id: left
+                                - trigger: event
+                                  event_type: state_changed
+                                  event_data:
+                                    entity_id: "{{ right_entity }}"
+                                  id: right
+                              timeout:
+                                milliseconds: "{{ 80 if pending != 0 else 400 }}"
+                            - variables:
+                                delta: >-
+                                  {% if wait.trigger is none or wait.trigger.event.data.new_state is none %}
+                                    0
+                                  {% elif eval_mode == 'instant' %}
+                                    {{ (1 if wait.trigger.id == 'right' else -1)
+                                       if wait.trigger.event.data.new_state.state == '1' else 0 }}
+                                  {% else %}
+                                    {{ (wait.trigger.event.data.new_state.attributes.totalNumberOfPressesCounted | int(1))
+                                       * (1 if wait.trigger.id == 'right' else -1) }}
+                                  {% endif %}
+                                done: "{{ wait.trigger is none and pending == 0 }}"
+                                quiet: "{{ wait.trigger is none }}"
+                                target: "{{ [[target + delta * step, 0] | max, upper] | min }}"
+                                pending: "{{ pending + delta }}"
 
-mode: queued
-max: 20
+# Einzelmodus: Rasterschritte während eines laufenden Durchgangs werden von
+# dessen Warteschleife gezählt und dürfen keinen zweiten Lauf starten.
+mode: single
 max_exceeded: silent
 
 variables:

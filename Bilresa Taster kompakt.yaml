@@ -18,10 +18,10 @@ blueprint:
     Halten regelt die Lautstärke bis zur eingestellten Obergrenze.
     Das Loslassen der Taste beendet nur das Dimmen und löst keine Aktion aus.
 
-    Version: 2026-11-11
+    Version: 2026-11-11b
   domain: automation
   homeassistant:
-    min_version: 2024.10.0
+    min_version: 2025.4.0
 
   input:
     button_on:
@@ -304,130 +304,117 @@ action:
       # startet die Automation neu und beendet damit die Schleife.
       - conditions: "{{ event_type == 'long_press' }}"
         sequence:
-          - repeat:
-              while: "{{ repeat.index <= 100 and state_attr(button, 'event_type') == 'long_press' }}"
-              sequence:
-                - choose:
-                    # ---- Licht
-                    - conditions: "{{ func == 'light' and lights | count > 0 }}"
+          - choose:
+              # ---- Licht: Zielwert wird im Lauf mitgeführt und absolut gesetzt
+              - conditions: "{{ func == 'light' and lights | count > 0 }}"
+                sequence:
+                  - variables:
+                      step: "{{ 100 * 0.25 / (ramp_time | float(4)) }}"
+                      on_lights: "{{ lights | select('is_state', 'on') | list }}"
+                      group: "{{ on_lights if on_lights | count > 0 else lights }}"
+                      # Startwert: hellste eingeschaltete Lampe in Prozent (aus = 0)
+                      level: >-
+                        {% set b = on_lights | map('state_attr', 'brightness')
+                                   | select('number') | list %}
+                        {{ 0 if on_lights | count == 0
+                           else (((b | max) / 255 * 100) if b else 100) }}
+                      finished: false
+                  # ausgeschaltete Lampen nur mit der Taste AN einschalten
+                  - condition: template
+                    value_template: >-
+                      {{ on_lights | count > 0 or (is_on and hold_turn_on) }}
+                  - repeat:
+                      while: >-
+                        {{ not finished and repeat.index <= 100
+                           and state_attr(button, 'event_type') == 'long_press' }}
                       sequence:
                         - variables:
-                            step: "{{ (100 * 0.25 / (ramp_time | float(4))) | round(1) }}"
-                            on_lights: "{{ lights | select('is_state', 'on') | list }}"
-                            current: >-
-                              {% set b = on_lights | map('state_attr', 'brightness')
-                                         | select('number') | list %}
-                              {{ ((b | max) / 255 * 100) | round(1) if b else 100 }}
+                            level: "{{ [[level + (step if is_on else -step), 0] | max, 100] | min }}"
                         - choose:
-                            # AN halten, alles aus -> dunkel einschalten
-                            - conditions: "{{ is_on and on_lights | count == 0 }}"
-                              sequence:
-                                - if: "{{ hold_turn_on }}"
-                                  then:
-                                    - action: light.turn_on
-                                      target:
-                                        entity_id: "{{ lights }}"
-                                      data:
-                                        brightness_pct: "{{ [step | round(0) | int, 1] | max }}"
-                                        transition: 0.25
-                            # AN halten -> heller
-                            - conditions: "{{ is_on }}"
+                            - conditions: "{{ level >= 1 }}"
                               sequence:
                                 - action: light.turn_on
                                   target:
-                                    entity_id: "{{ on_lights }}"
+                                    entity_id: "{{ group }}"
                                   data:
-                                    brightness_step_pct: "{{ step }}"
+                                    brightness_pct: "{{ level | round(0) | int }}"
                                     transition: 0.25
-                            # AUS halten, ganz unten -> aus (oder 1 %)
-                            - conditions: "{{ on_lights | count > 0 and current - step < 1 }}"
+                            - conditions: "{{ hold_turn_off }}"
                               sequence:
-                                - if: "{{ hold_turn_off }}"
-                                  then:
-                                    - action: light.turn_off
-                                      target:
-                                        entity_id: "{{ on_lights }}"
-                                      data:
-                                        transition: 0.25
-                                  else:
-                                    - action: light.turn_on
-                                      target:
-                                        entity_id: "{{ on_lights }}"
-                                      data:
-                                        brightness_pct: 1
-                                        transition: 0.25
-                            # AUS halten -> dunkler
-                            - conditions: "{{ on_lights | count > 0 }}"
-                              sequence:
-                                - action: light.turn_on
+                                - action: light.turn_off
                                   target:
-                                    entity_id: "{{ on_lights }}"
+                                    entity_id: "{{ group }}"
                                   data:
-                                    brightness_step_pct: "{{ -1 * step }}"
                                     transition: 0.25
+                          default:
+                            - action: light.turn_on
+                              target:
+                                entity_id: "{{ group }}"
+                              data:
+                                brightness_pct: 1
+                                transition: 0.25
+                        - variables:
+                            finished: "{{ level >= 100 or level < 1 }}"
+                        - delay: 0.25
 
-                    # ---- Media
-                    - conditions: "{{ func == 'media' and players | count > 0 }}"
-                      sequence:
-                        - variables:
-                            vol_max: "{{ volume_max_pct | float(40) }}"
-                            vol_step: "{{ (volume_max_pct | float(40)) * 0.25 / (ramp_time | float(4)) }}"
-                            active: >-
-                              {{ players | reject('is_state', ['off', 'standby', 'unavailable', 'unknown']) | list }}
-                        - choose:
-                            # AN halten, alles aus -> einschalten
-                            - conditions: "{{ is_on and active | count == 0 }}"
-                              sequence:
-                                - if: "{{ hold_turn_on }}"
-                                  then:
-                                    - action: media_player.turn_on
+              # ---- Media: gleiches Prinzip für die Lautstärke
+              - conditions: "{{ func == 'media' and players | count > 0 }}"
+                sequence:
+                  - variables:
+                      step: "{{ (volume_max_pct | float(40)) * 0.25 / (ramp_time | float(4)) }}"
+                      active: >-
+                        {{ players | reject('is_state', ['off', 'standby', 'unavailable', 'unknown']) | list }}
+                      # Startwert: lautester aktiver Player in Prozent
+                      level: >-
+                        {% set v = active | map('state_attr', 'volume_level')
+                                   | select('number') | list %}
+                        {{ (v | max) * 100 if v else 0 }}
+                      # nie lauter als das Maximum (eine höhere Ausgangslautstärke bleibt)
+                      upper: "{{ [volume_max_pct | float(40), level] | max }}"
+                      finished: false
+                  - choose:
+                      # alles aus -> mit der Taste AN einschalten
+                      - conditions: "{{ active | count == 0 }}"
+                        sequence:
+                          - if: "{{ is_on and hold_turn_on }}"
+                            then:
+                              - action: media_player.turn_on
+                                continue_on_error: true
+                                target:
+                                  entity_id: "{{ players }}"
+                    default:
+                      - repeat:
+                          while: >-
+                            {{ not finished and repeat.index <= 100
+                               and state_attr(button, 'event_type') == 'long_press' }}
+                          sequence:
+                            - variables:
+                                level: "{{ [[level + (step if is_on else -step), 0] | max, upper] | min }}"
+                            - choose:
+                                - conditions: "{{ level >= 0.5 }}"
+                                  sequence:
+                                    - action: media_player.volume_set
                                       continue_on_error: true
                                       target:
-                                        entity_id: "{{ players }}"
-                            - conditions: "{{ active | count > 0 }}"
-                              sequence:
-                                - repeat:
-                                    for_each: "{{ active }}"
-                                    sequence:
-                                      - variables:
-                                          vol: "{{ (state_attr(repeat.item, 'volume_level') | float(0)) * 100 }}"
-                                      - choose:
-                                          # AN halten -> lauter, begrenzt auf Maximum
-                                          - conditions: "{{ is_on }}"
-                                            sequence:
-                                              - if: "{{ vol < vol_max }}"
-                                                then:
-                                                  - action: media_player.volume_set
-                                                    continue_on_error: true
-                                                    target:
-                                                      entity_id: "{{ repeat.item }}"
-                                                    data:
-                                                      volume_level: "{{ ([vol + vol_step, vol_max] | min / 100) | round(3) }}"
-                                          # AUS halten, unter 0 -> aus (oder stumm auf 0)
-                                          - conditions: "{{ vol - vol_step < 0.5 }}"
-                                            sequence:
-                                              - if: "{{ hold_turn_off }}"
-                                                then:
-                                                  - action: media_player.turn_off
-                                                    continue_on_error: true
-                                                    target:
-                                                      entity_id: "{{ repeat.item }}"
-                                                else:
-                                                  - action: media_player.volume_set
-                                                    continue_on_error: true
-                                                    target:
-                                                      entity_id: "{{ repeat.item }}"
-                                                    data:
-                                                      volume_level: 0
-                                        # AUS halten -> leiser
-                                        default:
-                                          - action: media_player.volume_set
-                                            continue_on_error: true
-                                            target:
-                                              entity_id: "{{ repeat.item }}"
-                                            data:
-                                              volume_level: "{{ ((vol - vol_step) / 100) | round(3) }}"
-                - delay: 0.25
+                                        entity_id: "{{ active }}"
+                                      data:
+                                        volume_level: "{{ (level / 100) | round(3) }}"
+                                - conditions: "{{ hold_turn_off }}"
+                                  sequence:
+                                    - action: media_player.turn_off
+                                      continue_on_error: true
+                                      target:
+                                        entity_id: "{{ active }}"
+                              default:
+                                - action: media_player.volume_set
+                                  continue_on_error: true
+                                  target:
+                                    entity_id: "{{ active }}"
+                                  data:
+                                    volume_level: 0
+                            - variables:
+                                finished: "{{ level >= upper or level < 0.5 }}"
+                            - delay: 0.25
 
 # Neustart: jedes neue Ereignis (auch das Loslassen) beendet eine laufende
 # Dimm-Schleife sofort.
