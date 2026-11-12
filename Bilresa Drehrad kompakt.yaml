@@ -16,11 +16,11 @@ blueprint:
     Für die Auswertung „Sofort“ müssen die 9 versteckten Sensor-Entitäten des
     Drehrads aktiviert sein (Gerät → Entitäten → „deaktivierte Entitäten“).
 
-    Version: 2026-11-12e – basiert auf „Ikea_bilresa_scroll_wheel“ von jhol-byte
+    Version: 2026-11-12f – basiert auf „Ikea_bilresa_scroll_wheel“ von jhol-byte
     (https://community.home-assistant.io/t/965365)
   domain: automation
   homeassistant:
-    min_version: 2024.10.0
+    min_version: 2025.4.0
 
   input:
     remote:
@@ -346,22 +346,22 @@ blueprint:
         eval_mode:
           name: Auswertung des Drehrads
           description: |
-            - **Entspannt** (empfohlen): eine Aktion je Drehbewegung mit der
-              genauen Anzahl Rasterschritte. Nur hier stimmt „Umdrehungen für
-              0–100 %“ zuverlässig.
-            - **Sofort**: reagiert schon während des Drehens über die versteckten
-              Sensor-Entitäten (müssen am Gerät aktiviert sein). Das Rad meldet
-              dabei aber nicht jeden Rasterschritt, die Umdrehungen stimmen nicht.
-          default: relaxed
+            - **Sofort**: reagiert ohne Verzögerung, solange gedreht wird. Geregelt
+              wird nach Drehdauer (Einstellung „Sofort: Drehdauer …“). Nutzt die
+              versteckten Sensor-Entitäten (müssen am Gerät aktiviert sein).
+            - **Entspannt**: eine Aktion nach dem Drehen mit der vom Rad gezählten
+              Schrittzahl; hier gilt „Umdrehungen für 0–100 %“. Benötigt die
+              Ereignis-Entitäten „Taste“ des Rads.
+          default: instant
           selector:
             select:
               options:
-                - label: Entspannt (empfohlen)
-                  value: relaxed
-                - label: Sofort (versteckte Sensoren)
+                - label: Sofort (nach Drehdauer)
                   value: instant
+                - label: Entspannt (nach Rasterschritten)
+                  value: relaxed
         clicks_per_turn:
-          name: Rasterschritte pro Umdrehung
+          name: "Entspannt: Rasterschritte pro Umdrehung"
           description: >-
             Anzahl der Rasterschritte, die das Rad bei einer vollen Umdrehung
             meldet. Wert anpassen, falls 0–100 % nicht genau zur gewählten
@@ -380,7 +380,7 @@ blueprint:
       collapsed: true
       input:
         light_turns:
-          name: Umdrehungen für 0 % bis 100 % Helligkeit
+          name: "Entspannt: Umdrehungen für 0 % bis 100 % Helligkeit"
           default: "1"
           selector:
             select:
@@ -389,6 +389,19 @@ blueprint:
                   value: "1"
                 - label: 2 volle Umdrehungen
                   value: "2"
+        light_ramp_time:
+          name: "Sofort: Drehdauer für 0 % bis 100 %"
+          description: >-
+            Nur bei Auswertung „Sofort“: so lange muss gedreht werden, um die
+            Helligkeit einmal über den ganzen Bereich zu bewegen.
+          default: 1.5
+          selector:
+            number:
+              min: 0.3
+              max: 10
+              step: 0.1
+              unit_of_measurement: s
+              mode: box
         light_turn_on:
           name: Drehen schaltet Licht ein
           description: Rechtsdrehen schaltet ausgeschaltete Lampen (dunkel beginnend) ein.
@@ -419,7 +432,7 @@ blueprint:
       collapsed: true
       input:
         media_turns:
-          name: Umdrehungen für 0 % bis maximale Lautstärke
+          name: "Entspannt: Umdrehungen für 0 % bis maximale Lautstärke"
           default: "1"
           selector:
             select:
@@ -428,6 +441,19 @@ blueprint:
                   value: "1"
                 - label: 2 volle Umdrehungen
                   value: "2"
+        media_ramp_time:
+          name: "Sofort: Drehdauer für 0 bis maximale Lautstärke"
+          description: >-
+            Nur bei Auswertung „Sofort“: so lange muss gedreht werden, um die
+            Lautstärke einmal über den ganzen Bereich zu bewegen.
+          default: 1.5
+          selector:
+            number:
+              min: 0.3
+              max: 10
+              step: 0.1
+              unit_of_measurement: s
+              mode: box
         volume_max_pct:
           name: Maximale Lautstärke
           description: Lauter als dieser Wert stellt das Drehrad nicht ein.
@@ -689,6 +715,136 @@ action:
                   - if: "{{ channel == 'ch3' }}"
                     then: !input wheel_action_ch3
 
+              # ---- Sofort / Licht: läuft, solange das Rad gedreht wird
+              # Der Sensor steht beim Drehen auf 1. Ein Lauf führt den Zielwert
+              # selbst mit und setzt ihn absolut (kein Zurückspringen durch
+              # verzögerte Lampenrückmeldungen). Keine Wartezeit nach dem Drehen.
+              - conditions: >-
+                  {{ eval_mode == 'instant' and func == 'light' and lights | count > 0
+                     and (now() - trigger.event.time_fired).total_seconds() < 0.5 }}
+                sequence:
+                  - variables:
+                      sensor: "{{ trigger.event.data.entity_id }}"
+                      dirv: "{{ 1 if scroll_direction == 'right' else -1 }}"
+                      tick: "{{ 100 / (light_ramp_time | float(1.5)) * 0.15 }}"
+                      on_lights: "{{ lights | select('is_state', 'on') | list }}"
+                      group: "{{ on_lights if on_lights | count > 0 else lights }}"
+                      level: >-
+                        {% set b = on_lights | map('state_attr', 'brightness')
+                                   | select('number') | list %}
+                        {{ 0 if on_lights | count == 0
+                           else (((b | max) / 255 * 100) if b else 100) }}
+                      stop: false
+                  # ausgeschaltete Lampen nur durch Rechtsdrehen einschalten
+                  - condition: template
+                    value_template: "{{ on_lights | count > 0 or (dirv > 0 and light_turn_on) }}"
+                  - repeat:
+                      while: >-
+                        {{ not stop and repeat.index <= 200 and (repeat.index == 1
+                           or is_state(sensor, '1')
+                           or (now() - states[sensor].last_changed).total_seconds() < 0.35) }}
+                      sequence:
+                        # in kurzen Meldelücken des Rads nur warten, nicht weiterregeln
+                        - variables:
+                            moving: "{{ repeat.index == 1 or is_state(sensor, '1') }}"
+                            level: >-
+                              {{ [[level + (dirv * tick if moving else 0), 0] | max, 100] | min }}
+                        - choose:
+                            - conditions: "{{ moving and level >= 1 }}"
+                              sequence:
+                                - action: light.turn_on
+                                  target:
+                                    entity_id: "{{ group }}"
+                                  data:
+                                    brightness_pct: "{{ level | round(0) | int }}"
+                                    transition: 0.15
+                            - conditions: "{{ moving and light_turn_off }}"
+                              sequence:
+                                - action: light.turn_off
+                                  target:
+                                    entity_id: "{{ group }}"
+                            - conditions: "{{ moving }}"
+                              sequence:
+                                - action: light.turn_on
+                                  target:
+                                    entity_id: "{{ group }}"
+                                  data:
+                                    brightness_pct: 1
+                        - variables:
+                            stop: "{{ level >= 100 or level < 1 }}"
+                        - delay:
+                            milliseconds: 150
+
+              # ---- Sofort / Media: gleiches Prinzip für die Lautstärke
+              - conditions: >-
+                  {{ eval_mode == 'instant' and func == 'media' and players | count > 0
+                     and (now() - trigger.event.time_fired).total_seconds() < 0.5 }}
+                sequence:
+                  - variables:
+                      sensor: "{{ trigger.event.data.entity_id }}"
+                      dirv: "{{ 1 if scroll_direction == 'right' else -1 }}"
+                      tick: "{{ (volume_max_pct | float(40)) / (media_ramp_time | float(1.5)) * 0.15 }}"
+                      active: >-
+                        {{ players | reject('is_state', ['off', 'standby', 'unavailable', 'unknown']) | list }}
+                      level: >-
+                        {% set v = active | map('state_attr', 'volume_level')
+                                   | select('number') | list %}
+                        {{ (v | max) * 100 if v else 0 }}
+                      # nie lauter als das Maximum (eine höhere Ausgangslautstärke bleibt)
+                      upper: "{{ [volume_max_pct | float(40), level] | max }}"
+                      stop: false
+                  - choose:
+                      # alles aus -> durch Rechtsdrehen einschalten
+                      - conditions: "{{ active | count == 0 }}"
+                        sequence:
+                          - if: "{{ dirv > 0 and media_turn_on }}"
+                            then:
+                              - action: media_player.turn_on
+                                continue_on_error: true
+                                target:
+                                  entity_id: "{{ players }}"
+                    default:
+                      - repeat:
+                          while: >-
+                            {{ not stop and repeat.index <= 200 and (repeat.index == 1
+                               or is_state(sensor, '1')
+                               or (now() - states[sensor].last_changed).total_seconds() < 0.35) }}
+                          sequence:
+                            - variables:
+                                moving: "{{ repeat.index == 1 or is_state(sensor, '1') }}"
+                                level: >-
+                                  {{ [[level + (dirv * tick if moving else 0), 0] | max, upper] | min }}
+                            - choose:
+                                - conditions: "{{ not moving }}"
+                                  sequence:
+                                    - delay:
+                                        milliseconds: 50
+                                - conditions: "{{ level >= 0.5 }}"
+                                  sequence:
+                                    - action: media_player.volume_set
+                                      continue_on_error: true
+                                      target:
+                                        entity_id: "{{ active }}"
+                                      data:
+                                        volume_level: "{{ (level / 100) | round(3) }}"
+                                - conditions: "{{ media_turn_off }}"
+                                  sequence:
+                                    - action: media_player.turn_off
+                                      continue_on_error: true
+                                      target:
+                                        entity_id: "{{ active }}"
+                              default:
+                                - action: media_player.volume_set
+                                  continue_on_error: true
+                                  target:
+                                    entity_id: "{{ active }}"
+                                  data:
+                                    volume_level: 0
+                            - variables:
+                                stop: "{{ level >= upper or level < 0.5 }}"
+                            - delay:
+                                milliseconds: 150
+
               # ---- Licht: Helligkeit
               # Wie im Original: ein Aufruf je Meldung des Rads, je Lampe relativ
               # zur aktuellen Helligkeit. Die Schrittweite ergibt sich aus der
@@ -820,10 +976,12 @@ variables:
   eval_mode: !input eval_mode
   clicks_per_turn: !input clicks_per_turn
   light_turns: !input light_turns
+  light_ramp_time: !input light_ramp_time
   light_turn_on: !input light_turn_on
   light_turn_off: !input light_turn_off
   light_transition: !input light_transition
   media_turns: !input media_turns
+  media_ramp_time: !input media_ramp_time
   volume_max_pct: !input volume_max_pct
   media_turn_on: !input media_turn_on
   media_turn_off: !input media_turn_off
