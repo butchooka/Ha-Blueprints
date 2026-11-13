@@ -1,0 +1,748 @@
+---
+blueprint:
+  name: Bilresa Wheel compact
+  description: |
+    Verschlankter, deutscher Blueprint für das **IKEA BILRESA Drehrad** (Matter, 3 Kanäle).
+
+    Pro Kanal wird ein **Basisgerät / Bereich** gewählt. Die Funktion des Drehrads
+    ergibt sich automatisch: **Lampe → Helligkeit**, **Media-Player → Lautstärke**
+    (enthält das Ziel beides, haben Lampen Vorrang). Die Funktion kann pro Kanal
+    auch fest gewählt oder durch eine eigene Dreh-Aktion ersetzt werden.
+
+    - Einfachklick: **AN** (änderbar oder eigene Aktion)
+    - Doppelklick: **AUS** (änderbar oder eigene Aktion)
+    - Dreifachklick und langer Druck: frei belegbar
+    - Drehen schaltet Licht / Media ein (rechts) und aus (links) – abschaltbar
+    - Licht: 0–100 % in 1 oder 2 vollen Umdrehungen
+    - Media: Lautstärke von 0 bis zu einer einstellbaren Maximallautstärke
+
+    **Auswertung „Sofort“ (Standard):** Die 9 versteckten Sensor-Entitäten des
+    Drehrads müssen aktiviert sein (Gerät → Entitäten → „deaktivierte Entitäten
+    anzeigen“ → aktivieren).
+
+    Basiert auf „Ikea_bilresa_scroll_wheel“ von jhol-byte
+    (https://community.home-assistant.io/t/965365), Version 2026-04-06.
+  domain: automation
+  homeassistant:
+    min_version: 2024.10.0
+
+  input:
+    remote:
+      name: Drehrad
+      description: IKEA BILRESA Drehrad (Matter)
+      selector:
+        device:
+          filter:
+            manufacturer: IKEA of Sweden
+            model: BILRESA scroll wheel
+            integration: matter
+
+    # =============================================================== Kanal 1
+    channel1_section:
+      name: Kanal 1
+      icon: mdi:numeric-1-circle-outline
+      collapsed: true
+      input:
+        target_ch1:
+          name: Basisgerät / Bereich
+          description: >-
+            Lampe(n), Media-Player, Gerät oder Bereich, das dieser Kanal primär
+            steuert. Leer lassen, wenn nur eigene Aktionen genutzt werden.
+          default: {}
+          selector:
+            target:
+              entity:
+                - domain:
+                    - light
+                    - media_player
+        wheel_mode_ch1:
+          name: Funktion des Drehrads
+          description: >-
+            „Automatisch“ wählt nach dem Ziel: Lampe → Helligkeit,
+            Media-Player → Lautstärke.
+          default: auto
+          selector:
+            select:
+              mode: dropdown
+              options: &wheel_options
+                - label: Automatisch (nach Ziel)
+                  value: auto
+                - label: "Licht: Helligkeit"
+                  value: light
+                - label: "Media: Lautstärke"
+                  value: media
+                - label: Eigene Dreh-Aktion
+                  value: custom
+        click_mode_ch1:
+          name: Einfachklick
+          default: turn_on
+          selector:
+            select:
+              mode: dropdown
+              options: &click_options
+                - label: AN
+                  value: turn_on
+                - label: AUS
+                  value: turn_off
+                - label: Umschalten
+                  value: toggle
+                - label: Eigene Aktion
+                  value: custom
+        click_action_ch1:
+          name: Einfachklick – eigene Aktion
+          description: Wird nur bei „Eigene Aktion“ ausgeführt.
+          default: []
+          selector:
+            action: {}
+        double_mode_ch1:
+          name: Doppelklick
+          default: turn_off
+          selector:
+            select:
+              mode: dropdown
+              options: *click_options
+        double_action_ch1:
+          name: Doppelklick – eigene Aktion
+          description: Wird nur bei „Eigene Aktion“ ausgeführt.
+          default: []
+          selector:
+            action: {}
+        triple_action_ch1:
+          name: Dreifachklick
+          description: Frei belegbare Aktion.
+          default: []
+          selector:
+            action: {}
+        long_action_ch1:
+          name: Langer Druck
+          description: Frei belegbare Aktion.
+          default: []
+          selector:
+            action: {}
+        wheel_action_ch1:
+          name: Eigene Dreh-Aktion
+          description: |
+            Nur bei Funktion „Eigene Dreh-Aktion“. Verfügbare Variablen:
+            - `scroll_direction`: 'left' oder 'right'
+            - `scroll_clicks`: Anzahl Rastungen (bei „Sofort“ immer 1)
+          default: []
+          selector:
+            action: {}
+
+    # =============================================================== Kanal 2
+    channel2_section:
+      name: Kanal 2
+      icon: mdi:numeric-2-circle-outline
+      collapsed: true
+      input:
+        target_ch2:
+          name: Basisgerät / Bereich
+          description: >-
+            Lampe(n), Media-Player, Gerät oder Bereich, das dieser Kanal primär
+            steuert. Leer lassen, wenn nur eigene Aktionen genutzt werden.
+          default: {}
+          selector:
+            target:
+              entity:
+                - domain:
+                    - light
+                    - media_player
+        wheel_mode_ch2:
+          name: Funktion des Drehrads
+          description: >-
+            „Automatisch“ wählt nach dem Ziel: Lampe → Helligkeit,
+            Media-Player → Lautstärke.
+          default: auto
+          selector:
+            select:
+              mode: dropdown
+              options: *wheel_options
+        click_mode_ch2:
+          name: Einfachklick
+          default: turn_on
+          selector:
+            select:
+              mode: dropdown
+              options: *click_options
+        click_action_ch2:
+          name: Einfachklick – eigene Aktion
+          description: Wird nur bei „Eigene Aktion“ ausgeführt.
+          default: []
+          selector:
+            action: {}
+        double_mode_ch2:
+          name: Doppelklick
+          default: turn_off
+          selector:
+            select:
+              mode: dropdown
+              options: *click_options
+        double_action_ch2:
+          name: Doppelklick – eigene Aktion
+          description: Wird nur bei „Eigene Aktion“ ausgeführt.
+          default: []
+          selector:
+            action: {}
+        triple_action_ch2:
+          name: Dreifachklick
+          description: Frei belegbare Aktion.
+          default: []
+          selector:
+            action: {}
+        long_action_ch2:
+          name: Langer Druck
+          description: Frei belegbare Aktion.
+          default: []
+          selector:
+            action: {}
+        wheel_action_ch2:
+          name: Eigene Dreh-Aktion
+          description: |
+            Nur bei Funktion „Eigene Dreh-Aktion“. Verfügbare Variablen:
+            - `scroll_direction`: 'left' oder 'right'
+            - `scroll_clicks`: Anzahl Rastungen (bei „Sofort“ immer 1)
+          default: []
+          selector:
+            action: {}
+
+    # =============================================================== Kanal 3
+    channel3_section:
+      name: Kanal 3
+      icon: mdi:numeric-3-circle-outline
+      collapsed: true
+      input:
+        target_ch3:
+          name: Basisgerät / Bereich
+          description: >-
+            Lampe(n), Media-Player, Gerät oder Bereich, das dieser Kanal primär
+            steuert. Leer lassen, wenn nur eigene Aktionen genutzt werden.
+          default: {}
+          selector:
+            target:
+              entity:
+                - domain:
+                    - light
+                    - media_player
+        wheel_mode_ch3:
+          name: Funktion des Drehrads
+          description: >-
+            „Automatisch“ wählt nach dem Ziel: Lampe → Helligkeit,
+            Media-Player → Lautstärke.
+          default: auto
+          selector:
+            select:
+              mode: dropdown
+              options: *wheel_options
+        click_mode_ch3:
+          name: Einfachklick
+          default: turn_on
+          selector:
+            select:
+              mode: dropdown
+              options: *click_options
+        click_action_ch3:
+          name: Einfachklick – eigene Aktion
+          description: Wird nur bei „Eigene Aktion“ ausgeführt.
+          default: []
+          selector:
+            action: {}
+        double_mode_ch3:
+          name: Doppelklick
+          default: turn_off
+          selector:
+            select:
+              mode: dropdown
+              options: *click_options
+        double_action_ch3:
+          name: Doppelklick – eigene Aktion
+          description: Wird nur bei „Eigene Aktion“ ausgeführt.
+          default: []
+          selector:
+            action: {}
+        triple_action_ch3:
+          name: Dreifachklick
+          description: Frei belegbare Aktion.
+          default: []
+          selector:
+            action: {}
+        long_action_ch3:
+          name: Langer Druck
+          description: Frei belegbare Aktion.
+          default: []
+          selector:
+            action: {}
+        wheel_action_ch3:
+          name: Eigene Dreh-Aktion
+          description: |
+            Nur bei Funktion „Eigene Dreh-Aktion“. Verfügbare Variablen:
+            - `scroll_direction`: 'left' oder 'right'
+            - `scroll_clicks`: Anzahl Rastungen (bei „Sofort“ immer 1)
+          default: []
+          selector:
+            action: {}
+
+    # ============================================== Drehrad (alle Kanäle)
+    wheel_section:
+      name: Drehrad (alle Kanäle)
+      icon: mdi:rotate-360
+      collapsed: true
+      input:
+        eval_mode:
+          name: Auswertung des Drehrads
+          description: |
+            - **Sofort**: ein Schritt je Rastung, während gedreht wird. Benötigt die
+              versteckten Sensor-Entitäten (müssen aktiviert sein).
+            - **Entspannt**: eine Aktion nach dem Drehen mit der gezählten
+              Anzahl Rastungen (genauer, aber verzögert).
+          default: instant
+          selector:
+            select:
+              options:
+                - label: Sofort
+                  value: instant
+                - label: Entspannt
+                  value: relaxed
+        clicks_per_turn:
+          name: Rastungen pro Umdrehung
+          description: >-
+            Anzahl Rastungen, die das Rad bei einer vollen Umdrehung meldet.
+            Daraus wird die Schrittweite für 0–100 % berechnet.
+          default: 18
+          selector:
+            number:
+              min: 4
+              max: 60
+              step: 1
+              mode: box
+
+    # =============================================== Licht (alle Kanäle)
+    light_section:
+      name: Licht (alle Kanäle)
+      icon: mdi:lightbulb-on-outline
+      collapsed: true
+      input:
+        light_turns:
+          name: Umdrehungen für 0 % bis 100 % Helligkeit
+          default: "1"
+          selector:
+            select:
+              options:
+                - label: 1 volle Umdrehung
+                  value: "1"
+                - label: 2 volle Umdrehungen
+                  value: "2"
+        light_turn_on:
+          name: Drehen schaltet Licht ein
+          description: Rechtsdrehen schaltet ausgeschaltete Lampen gedimmt ein.
+          default: true
+          selector:
+            boolean: {}
+        light_turn_off:
+          name: Drehen schaltet Licht aus
+          description: >-
+            Linksdrehen unter 1 % schaltet die Lampen aus. Ohne diese Option
+            bleibt die Lampe auf 1 %.
+          default: true
+          selector:
+            boolean: {}
+        light_transition:
+          name: Übergangszeit
+          default: 0.2
+          selector:
+            number:
+              min: 0
+              max: 5
+              step: 0.1
+              unit_of_measurement: s
+              mode: box
+
+    # =============================================== Media (alle Kanäle)
+    media_section:
+      name: Media (alle Kanäle)
+      icon: mdi:volume-high
+      collapsed: true
+      input:
+        volume_max_pct:
+          name: Maximale Lautstärke
+          description: Lauter als dieser Wert stellt das Drehrad nicht ein.
+          default: 40
+          selector:
+            number:
+              min: 5
+              max: 100
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
+        media_turns:
+          name: Umdrehungen für 0 % bis maximale Lautstärke
+          default: "1"
+          selector:
+            select:
+              options:
+                - label: 1 volle Umdrehung
+                  value: "1"
+                - label: 2 volle Umdrehungen
+                  value: "2"
+        media_turn_on:
+          name: Drehen schaltet Media-Player ein
+          description: Rechtsdrehen schaltet ausgeschaltete Media-Player ein.
+          default: true
+          selector:
+            boolean: {}
+        media_turn_off:
+          name: Drehen schaltet Media-Player aus
+          description: >-
+            Linksdrehen bei Lautstärke 0 schaltet die Media-Player aus.
+          default: true
+          selector:
+            boolean: {}
+
+
+# Entitäten des Drehrads anhand der Endnummer finden (wie im Original)
+trigger_variables:
+  var_remote: !input remote
+  var_button_ch1: "{{ device_entities(var_remote) | select('match', '^event\\..+[a-zA-Z]_3$') | list | first | default('') }}"
+  var_scroll_right_ch1: "{{ device_entities(var_remote) | select('match', '^event\\..+[a-zA-Z]_1$') | list | first | default('') }}"
+  var_scroll_left_ch1: "{{ device_entities(var_remote) | select('match', '^event\\..+[a-zA-Z]_2$') | list | first | default('') }}"
+  var_scroll_right_ext_ch1: "{{ device_entities(var_remote) | select('match', '^sensor\\..+[a-zA-Z]_1$') | list | first | default('') }}"
+  var_scroll_left_ext_ch1: "{{ device_entities(var_remote) | select('match', '^sensor\\..+[a-zA-Z]_2$') | list | first | default('') }}"
+  var_button_ch2: "{{ device_entities(var_remote) | select('match', '^event\\..+[a-zA-Z]_6$') | list | first | default('') }}"
+  var_scroll_right_ch2: "{{ device_entities(var_remote) | select('match', '^event\\..+[a-zA-Z]_4$') | list | first | default('') }}"
+  var_scroll_left_ch2: "{{ device_entities(var_remote) | select('match', '^event\\..+[a-zA-Z]_5$') | list | first | default('') }}"
+  var_scroll_right_ext_ch2: "{{ device_entities(var_remote) | select('match', '^sensor\\..+[a-zA-Z]_4$') | list | first | default('') }}"
+  var_scroll_left_ext_ch2: "{{ device_entities(var_remote) | select('match', '^sensor\\..+[a-zA-Z]_5$') | list | first | default('') }}"
+  var_button_ch3: "{{ device_entities(var_remote) | select('match', '^event\\..+[a-zA-Z]_9$') | list | first | default('') }}"
+  var_scroll_right_ch3: "{{ device_entities(var_remote) | select('match', '^event\\..+[a-zA-Z]_7$') | list | first | default('') }}"
+  var_scroll_left_ch3: "{{ device_entities(var_remote) | select('match', '^event\\..+[a-zA-Z]_8$') | list | first | default('') }}"
+  var_scroll_right_ext_ch3: "{{ device_entities(var_remote) | select('match', '^sensor\\..+[a-zA-Z]_7$') | list | first | default('') }}"
+  var_scroll_left_ext_ch3: "{{ device_entities(var_remote) | select('match', '^sensor\\..+[a-zA-Z]_8$') | list | first | default('') }}"
+
+triggers:
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_button_ch1 }}" }
+    id: button_ch1
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_scroll_left_ch1 }}" }
+    id: scroll_left_ch1
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_scroll_right_ch1 }}" }
+    id: scroll_right_ch1
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_scroll_left_ext_ch1 }}" }
+    id: scroll_left_ext_ch1
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_scroll_right_ext_ch1 }}" }
+    id: scroll_right_ext_ch1
+
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_button_ch2 }}" }
+    id: button_ch2
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_scroll_left_ch2 }}" }
+    id: scroll_left_ch2
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_scroll_right_ch2 }}" }
+    id: scroll_right_ch2
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_scroll_left_ext_ch2 }}" }
+    id: scroll_left_ext_ch2
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_scroll_right_ext_ch2 }}" }
+    id: scroll_right_ext_ch2
+
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_button_ch3 }}" }
+    id: button_ch3
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_scroll_left_ch3 }}" }
+    id: scroll_left_ch3
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_scroll_right_ch3 }}" }
+    id: scroll_right_ch3
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_scroll_left_ext_ch3 }}" }
+    id: scroll_left_ext_ch3
+  - trigger: event
+    event_type: state_changed
+    event_data: { entity_id: "{{ var_scroll_right_ext_ch3 }}" }
+    id: scroll_right_ext_ch3
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.event.data.old_state is not none
+         and trigger.event.data.new_state is not none
+         and trigger.event.data.old_state.state != 'unavailable'
+         and trigger.event.data.new_state.state != 'unavailable' }}
+
+variables:
+  cfg:
+    ch1:
+      target: !input target_ch1
+      wheel: !input wheel_mode_ch1
+      click: !input click_mode_ch1
+      double: !input double_mode_ch1
+    ch2:
+      target: !input target_ch2
+      wheel: !input wheel_mode_ch2
+      click: !input click_mode_ch2
+      double: !input double_mode_ch2
+    ch3:
+      target: !input target_ch3
+      wheel: !input wheel_mode_ch3
+      click: !input click_mode_ch3
+      double: !input double_mode_ch3
+  eval_mode: !input eval_mode
+  clicks_per_turn: !input clicks_per_turn
+  light_turns: !input light_turns
+  light_turn_on: !input light_turn_on
+  light_turn_off: !input light_turn_off
+  light_transition: !input light_transition
+  volume_max_pct: !input volume_max_pct
+  media_turns: !input media_turns
+  media_turn_on: !input media_turn_on
+  media_turn_off: !input media_turn_off
+
+actions:
+  - variables:
+      channel: "{{ trigger.id[-3:] }}"
+      is_button: "{{ trigger.id.startswith('button') }}"
+      is_ext: "{{ '_ext_' in trigger.id }}"
+      event_type: "{{ trigger.event.data.new_state.attributes.event_type | default('') }}"
+      # Basisgerät / Bereich in Entitäten auflösen
+      entities: >-
+        {% set t = cfg[channel]['target'] %}
+        {% set ns = namespace(e=[]) %}
+        {% if t is mapping %}
+          {% for key in ['entity_id', 'device_id', 'area_id', 'floor_id', 'label_id'] %}
+            {% set x = t.get(key) or [] %}
+            {% for i in ([x] if x is string else x) %}
+              {% if key == 'entity_id' %}
+                {% set ns.e = ns.e + [i] %}
+              {% elif key == 'device_id' %}
+                {% set ns.e = ns.e + device_entities(i) | list %}
+              {% elif key == 'area_id' %}
+                {% set ns.e = ns.e + area_entities(i) | list %}
+              {% elif key == 'floor_id' %}
+                {% for a in floor_areas(i) %}
+                  {% set ns.e = ns.e + area_entities(a) | list %}
+                {% endfor %}
+              {% else %}
+                {% set ns.e = ns.e + label_entities(i) | list %}
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+        {% endif %}
+        {{ ns.e | unique | list }}
+      lights: "{{ entities | select('match', '^light\\.') | list }}"
+      players: "{{ entities | select('match', '^media_player\\.') | list }}"
+      wheel_mode: "{{ cfg[channel]['wheel'] }}"
+      # Zielfunktion: fest gewählt oder automatisch (Lampen haben Vorrang)
+      func: >-
+        {% if wheel_mode in ['light', 'media', 'custom'] %}{{ wheel_mode }}
+        {% elif lights | count > 0 %}light
+        {% elif players | count > 0 %}media
+        {% else %}none{% endif %}
+
+  - choose:
+      # ---------------------------------------------------------- Einfachklick
+      - conditions: "{{ is_button and event_type == 'multi_press_1' }}"
+        sequence:
+          - variables:
+              mode: "{{ cfg[channel]['click'] }}"
+          - if: "{{ mode == 'custom' }}"
+            then:
+              - if: "{{ channel == 'ch1' }}"
+                then: !input click_action_ch1
+              - if: "{{ channel == 'ch2' }}"
+                then: !input click_action_ch2
+              - if: "{{ channel == 'ch3' }}"
+                then: !input click_action_ch3
+            else: &switch_target
+              - choose:
+                  - conditions: "{{ func == 'light' and lights | count > 0 }}"
+                    sequence:
+                      - action: "light.{{ mode }}"
+                        target:
+                          entity_id: "{{ lights }}"
+                  - conditions: "{{ func == 'media' and players | count > 0 }}"
+                    sequence:
+                      - action: "media_player.{{ mode }}"
+                        continue_on_error: true
+                        target:
+                          entity_id: "{{ players }}"
+
+      # ----------------------------------------------------------- Doppelklick
+      - conditions: "{{ is_button and event_type == 'multi_press_2' }}"
+        sequence:
+          - variables:
+              mode: "{{ cfg[channel]['double'] }}"
+          - if: "{{ mode == 'custom' }}"
+            then:
+              - if: "{{ channel == 'ch1' }}"
+                then: !input double_action_ch1
+              - if: "{{ channel == 'ch2' }}"
+                then: !input double_action_ch2
+              - if: "{{ channel == 'ch3' }}"
+                then: !input double_action_ch3
+            else: *switch_target
+
+      # --------------------------------------------------------- Dreifachklick
+      - conditions: "{{ is_button and event_type == 'multi_press_3' }}"
+        sequence:
+          - if: "{{ channel == 'ch1' }}"
+            then: !input triple_action_ch1
+          - if: "{{ channel == 'ch2' }}"
+            then: !input triple_action_ch2
+          - if: "{{ channel == 'ch3' }}"
+            then: !input triple_action_ch3
+
+      # ---------------------------------------------------------- Langer Druck
+      - conditions: "{{ is_button and event_type == 'long_press' }}"
+        sequence:
+          - if: "{{ channel == 'ch1' }}"
+            then: !input long_action_ch1
+          - if: "{{ channel == 'ch2' }}"
+            then: !input long_action_ch2
+          - if: "{{ channel == 'ch3' }}"
+            then: !input long_action_ch3
+
+      # --------------------------------------------------------------- Drehrad
+      # Entspannt: Ereignis-Entität (zählt Rastungen)
+      # Sofort:    versteckter Sensor wechselt je Rastung auf '1'
+      - conditions: >-
+          {{ not is_button and (
+               (eval_mode == 'relaxed' and not is_ext)
+               or (eval_mode == 'instant' and is_ext
+                   and trigger.event.data.new_state.state == '1'
+                   and trigger.event.data.old_state.state != '1') ) }}
+        sequence:
+          - variables:
+              scroll_direction: "{{ 'left' if 'left' in trigger.id else 'right' }}"
+              scroll_clicks: >-
+                {{ trigger.event.data.new_state.attributes.totalNumberOfPressesCounted | int(1)
+                   if eval_mode == 'relaxed' else 1 }}
+              dir: "{{ 1 if scroll_direction == 'right' else -1 }}"
+          - choose:
+              # ---- eigene Dreh-Aktion
+              - conditions: "{{ func == 'custom' }}"
+                sequence:
+                  - if: "{{ channel == 'ch1' }}"
+                    then: !input wheel_action_ch1
+                  - if: "{{ channel == 'ch2' }}"
+                    then: !input wheel_action_ch2
+                  - if: "{{ channel == 'ch3' }}"
+                    then: !input wheel_action_ch3
+
+              # ---- Licht: Helligkeit (0–100 % in 1 oder 2 Umdrehungen)
+              - conditions: "{{ func == 'light' and lights | count > 0 }}"
+                sequence:
+                  - variables:
+                      step: "{{ 100 / ((light_turns | int(1)) * (clicks_per_turn | int(18))) }}"
+                      change: "{{ step * (scroll_clicks | int(1)) * dir }}"
+                  - repeat:
+                      for_each: "{{ lights }}"
+                      sequence:
+                        - variables:
+                            is_on: "{{ is_state(repeat.item, 'on') }}"
+                            current: "{{ (state_attr(repeat.item, 'brightness') | int(255)) / 255 * 100 }}"
+                            new: "{{ [current + change, 100] | min }}"
+                        - choose:
+                            # aus + rechts -> gedimmt einschalten
+                            - conditions: "{{ not is_on and dir > 0 and light_turn_on }}"
+                              sequence:
+                                - action: light.turn_on
+                                  target:
+                                    entity_id: "{{ repeat.item }}"
+                                  data:
+                                    brightness_pct: "{{ [[change | round(0) | int, 1] | max, 100] | min }}"
+                                    transition: "{{ light_transition }}"
+                            # an + unter 1 % -> aus (oder auf 1 % halten)
+                            - conditions: "{{ is_on and new < 1 }}"
+                              sequence:
+                                - if: "{{ light_turn_off }}"
+                                  then:
+                                    - action: light.turn_off
+                                      target:
+                                        entity_id: "{{ repeat.item }}"
+                                      data:
+                                        transition: "{{ light_transition }}"
+                                  else:
+                                    - action: light.turn_on
+                                      target:
+                                        entity_id: "{{ repeat.item }}"
+                                      data:
+                                        brightness_pct: 1
+                                        transition: "{{ light_transition }}"
+                            # an -> heller / dunkler (wie im Original per brightness_step_pct)
+                            - conditions: "{{ is_on }}"
+                              sequence:
+                                - action: light.turn_on
+                                  target:
+                                    entity_id: "{{ repeat.item }}"
+                                  data:
+                                    brightness_step_pct: "{{ (new - current) | round(1) }}"
+                                    transition: "{{ light_transition }}"
+
+              # ---- Media: Lautstärke (0 bis Maximallautstärke in 1 oder 2 Umdrehungen)
+              - conditions: "{{ func == 'media' and players | count > 0 }}"
+                sequence:
+                  - variables:
+                      step: >-
+                        {{ (volume_max_pct | float(40))
+                           / ((media_turns | int(1)) * (clicks_per_turn | int(18))) }}
+                      change: "{{ step * (scroll_clicks | int(1)) * dir }}"
+                  - repeat:
+                      for_each: "{{ players }}"
+                      sequence:
+                        - variables:
+                            is_off: "{{ states(repeat.item) in ['off', 'standby', 'unavailable', 'unknown'] }}"
+                            vol: "{{ (state_attr(repeat.item, 'volume_level') | float(0)) * 100 }}"
+                            # nie über das Maximum (eine bereits höhere Lautstärke bleibt)
+                            upper: "{{ [volume_max_pct | float(40), vol] | max }}"
+                            new: "{{ [[vol + change, upper] | min, 0] | max }}"
+                        - choose:
+                            # aus + rechts -> einschalten
+                            - conditions: "{{ is_off }}"
+                              sequence:
+                                - if: "{{ dir > 0 and media_turn_on }}"
+                                  then:
+                                    - action: media_player.turn_on
+                                      continue_on_error: true
+                                      target:
+                                        entity_id: "{{ repeat.item }}"
+                            # bereits auf 0 + links -> ausschalten
+                            - conditions: "{{ dir < 0 and vol < 0.5 }}"
+                              sequence:
+                                - if: "{{ media_turn_off }}"
+                                  then:
+                                    - action: media_player.turn_off
+                                      continue_on_error: true
+                                      target:
+                                        entity_id: "{{ repeat.item }}"
+                          default:
+                            - action: media_player.volume_set
+                              continue_on_error: true
+                              target:
+                                entity_id: "{{ repeat.item }}"
+                              data:
+                                volume_level: "{{ (new / 100) | round(3) }}"
+
+# wie im Original: Meldungen werden nacheinander abgearbeitet
+mode: queued
+max: 10
+max_exceeded: silent
