@@ -4,21 +4,35 @@ blueprint:
   description: |
     Kompakter Blueprint für den **IKEA BILRESA Doppeltaster** (Matter).
 
-    Es wird ein Ziel gewählt (Lampe, Media-Player, Gerät oder Bereich).
-    Enthält das Ziel Lampen und Media-Player, haben Lampen Vorrang.
+    Es wird ein Hauptziel gewählt (Lampe, Media-Player, Schalter/Steckdose,
+    Gerät oder Bereich), optional ein Zweitziel (Lampe oder Media-Player).
+    Enthält ein Ziel mehreres, gilt der Vorrang Licht → Media → Schalter.
+
+    **Ohne Zweitziel** steuert der Taster nur das Hauptziel:
 
     | | Taste AN | Taste AUS |
     |---|---|---|
-    | Einfachklick | Licht gedimmt und warm (25 %) | Licht schnell aus |
-    | Doppelklick | Licht hell und kälter (75 %) | Licht langsam aus (10 s) |
+    | Einfachklick | Stufe 1: gedimmt und warm (25 %) | schnell aus |
+    | Doppelklick | Stufe 2: hell und kälter (75 %) | langsam aus (10 s) |
     | Dreifachklick | frei belegbar | frei belegbar |
     | Halten | heller / lauter | dunkler / leiser |
 
-    Bei einem Media-Player schalten Einfach- und Doppelklick ein bzw. aus,
-    Halten regelt die Lautstärke bis zur eingestellten Obergrenze.
+    **Mit Zweitziel** schaltet der Einfachklick das Hauptziel (z. B. eine
+    Steckdose), alles andere wirkt auf das Zweitziel:
+
+    | | Taste AN | Taste AUS |
+    |---|---|---|
+    | Einfachklick | Hauptziel an | Hauptziel aus |
+    | Doppelklick | Zweitziel Stufe 1 | Zweitziel schnell aus |
+    | Dreifachklick | Zweitziel Stufe 2 | Zweitziel langsam aus |
+    | Halten | Zweitziel heller / lauter | Zweitziel dunkler / leiser |
+
+    Media-Player werden statt der Stufen ein- bzw. ausgeschaltet, Halten regelt
+    die Lautstärke bis zur eingestellten Obergrenze. Schalter kennen nur an/aus.
+    Die frei belegbaren Dreifachklick-Aktionen laufen mit Zweitziel zusätzlich.
     Das Loslassen der Taste beendet nur das Dimmen und löst keine Aktion aus.
 
-    Version: 2026-11-11d
+    Version: 2026-11-23a
   domain: automation
   homeassistant:
     min_version: 2025.4.0
@@ -41,8 +55,26 @@ blueprint:
             - domain: event
               integration: matter
     target:
-      name: Ziel
-      description: Lampe(n), Media-Player, Gerät oder Bereich, das der Taster steuert.
+      name: Hauptziel
+      description: >-
+        Lampe(n), Media-Player, Schalter/Steckdose, Gerät oder Bereich, das
+        der Taster steuert. Mit Zweitziel schaltet nur der Einfachklick das
+        Hauptziel an bzw. aus.
+      default: {}
+      selector:
+        target:
+          entity:
+            - domain:
+                - light
+                - media_player
+                - switch
+                - input_boolean
+                - fan
+    secondary_target:
+      name: Zweitziel (optional)
+      description: >-
+        Lampe(n) oder Media-Player für Doppelklick, Dreifachklick und Halten.
+        Leer lassen, damit alles auf das Hauptziel wirkt.
       default: {}
       selector:
         target:
@@ -51,10 +83,10 @@ blueprint:
                 - light
                 - media_player
     function:
-      name: Funktion
+      name: Funktion des Hauptziels
       description: >-
-        „Automatisch“ wählt nach dem Ziel: Lampe → Licht,
-        Media-Player → Media.
+        „Automatisch“ wählt nach dem Hauptziel: Lampe → Licht,
+        Media-Player → Media, sonst Schalter.
       default: auto
       selector:
         select:
@@ -66,6 +98,8 @@ blueprint:
               value: light
             - label: Media
               value: media
+            - label: Schalter / Steckdose
+              value: switch
     triple_action_on:
       name: "Taste AN: Dreifachklick"
       description: Frei belegbare Aktion.
@@ -82,11 +116,14 @@ blueprint:
     # ------------------------------------------------------ Licht-Vorgaben
     light_section:
       name: Licht – Vorgaben für Klicks
+      description: >-
+        Stufe 1 / schnell aus = Einfachklick (mit Zweitziel: Doppelklick).
+        Stufe 2 / langsam aus = Doppelklick (mit Zweitziel: Dreifachklick).
       icon: mdi:lightbulb-on-outline
       collapsed: true
       input:
         single_brightness:
-          name: "Einfachklick AN: Helligkeit"
+          name: "Stufe 1: Helligkeit"
           default: 25
           selector:
             number:
@@ -95,7 +132,7 @@ blueprint:
               unit_of_measurement: "%"
               mode: slider
         single_kelvin:
-          name: "Einfachklick AN: Farbtemperatur"
+          name: "Stufe 1: Farbtemperatur"
           description: Niedrig = warm, hoch = kalt.
           default: 2700
           selector:
@@ -104,7 +141,7 @@ blueprint:
               min: 2000
               max: 6500
         double_brightness:
-          name: "Doppelklick AN: Helligkeit"
+          name: "Stufe 2: Helligkeit"
           default: 75
           selector:
             number:
@@ -113,7 +150,7 @@ blueprint:
               unit_of_measurement: "%"
               mode: slider
         double_kelvin:
-          name: "Doppelklick AN: Farbtemperatur"
+          name: "Stufe 2: Farbtemperatur"
           description: Niedrig = warm, hoch = kalt.
           default: 4000
           selector:
@@ -122,7 +159,7 @@ blueprint:
               min: 2000
               max: 6500
         fast_off:
-          name: "Einfachklick AUS: Ausschaltdauer (schnell)"
+          name: "Schnell aus: Ausschaltdauer"
           default: 0.5
           selector:
             number:
@@ -132,7 +169,7 @@ blueprint:
               unit_of_measurement: s
               mode: box
         slow_off:
-          name: "Doppelklick AUS: Ausschaltdauer (langsam)"
+          name: "Langsam aus: Ausschaltdauer"
           default: 10
           selector:
             number:
@@ -174,7 +211,7 @@ blueprint:
               mode: slider
         hold_turn_on:
           name: Halten schaltet ein
-          description: Halten der Taste AN schaltet ein ausgeschaltetes Ziel (dunkel beginnend) ein.
+          description: Halten der Taste AN schaltet ein ausgeschaltetes Ziel (dunkel beginnend) ein. Mit Zweitziel gilt Halten für das Zweitziel.
           default: true
           selector:
             boolean:
@@ -206,50 +243,94 @@ action:
       is_on: "{{ trigger.id == 'on' }}"
       button: "{{ trigger.entity_id }}"
       event_type: "{{ trigger.to_state.attributes.event_type | default('') }}"
-      # Ziel (Entität, Gerät, Bereich, Etage, Label) in Entitäten auflösen
-      entities: >-
-        {% set t = target %}
-        {% set ns = namespace(e=[]) %}
-        {% if t is mapping %}
-          {% for key in ['entity_id', 'device_id', 'area_id', 'floor_id', 'label_id'] %}
-            {% set x = t.get(key) or [] %}
-            {% for i in ([x] if x is string else x) %}
-              {% if key == 'entity_id' %}
-                {% set ns.e = ns.e + [i] %}
-              {% elif key == 'device_id' %}
-                {% set ns.e = ns.e + device_entities(i) | list %}
-              {% elif key == 'area_id' %}
-                {% set ns.e = ns.e + area_entities(i) | list %}
-              {% elif key == 'floor_id' %}
-                {% for a in floor_areas(i) %}
-                  {% set ns.e = ns.e + area_entities(a) | list %}
-                {% endfor %}
-              {% else %}
-                {% set ns.e = ns.e + label_entities(i) | list %}
-              {% endif %}
+      # Haupt- und Zweitziel (Entität, Gerät, Bereich, Etage, Label) in
+      # Entitäten auflösen -> [Hauptziel-Liste, Zweitziel-Liste]
+      resolved: >-
+        {% set out = namespace(l=[]) %}
+        {% for t in [target, secondary_target] %}
+          {% set ns = namespace(e=[]) %}
+          {% if t is mapping %}
+            {% for key in ['entity_id', 'device_id', 'area_id', 'floor_id', 'label_id'] %}
+              {% set x = t.get(key) or [] %}
+              {% for i in ([x] if x is string else x) %}
+                {% if key == 'entity_id' %}
+                  {% set ns.e = ns.e + [i] %}
+                {% elif key == 'device_id' %}
+                  {% set ns.e = ns.e + device_entities(i) | list %}
+                {% elif key == 'area_id' %}
+                  {% set ns.e = ns.e + area_entities(i) | list %}
+                {% elif key == 'floor_id' %}
+                  {% for a in floor_areas(i) %}
+                    {% set ns.e = ns.e + area_entities(a) | list %}
+                  {% endfor %}
+                {% else %}
+                  {% set ns.e = ns.e + label_entities(i) | list %}
+                {% endif %}
+              {% endfor %}
             {% endfor %}
-          {% endfor %}
-        {% endif %}
-        {{ ns.e | unique | list }}
-      lights: >-
-        {{ entities | select('match', 'light\.') | list }}
-      players: >-
-        {{ entities | select('match', 'media_player\.') | list }}
-      # Lampen haben Vorrang, wenn das Ziel beides enthält
-      func: >-
-        {% if function in ['light', 'media'] %}
+          {% endif %}
+          {% set out.l = out.l + [ns.e | unique | list] %}
+        {% endfor %}
+        {{ out.l }}
+      main_lights: "{{ resolved[0] | select('match', 'light\\.') | list }}"
+      main_players: "{{ resolved[0] | select('match', 'media_player\\.') | list }}"
+      main_switches: >-
+        {{ resolved[0] | select('match', '(switch|input_boolean|fan)\\.') | list }}
+      sec_lights: "{{ resolved[1] | select('match', 'light\\.') | list }}"
+      sec_players: "{{ resolved[1] | select('match', 'media_player\\.') | list }}"
+      # Vorrang: Licht -> Media -> Schalter
+      main_func: >-
+        {% if function in ['light', 'media', 'switch'] %}
           {{ function }}
-        {% elif lights | count > 0 %}
+        {% elif main_lights | count > 0 %}
           light
-        {% elif players | count > 0 %}
+        {% elif main_players | count > 0 %}
           media
+        {% elif main_switches | count > 0 %}
+          switch
         {% else %}
           none
         {% endif %}
+      main_power: >-
+        {{ {'light': main_lights, 'media': main_players,
+            'switch': main_switches}.get(main_func, []) }}
+      sec_func: >-
+        {{ 'light' if sec_lights | count > 0
+           else ('media' if sec_players | count > 0 else 'none') }}
+      # Mit Zweitziel: Einfachklick = Hauptziel an/aus, Rest = Zweitziel
+      shifted: "{{ sec_func != 'none' }}"
+      press: >-
+        {{ {'multi_press_1': 1, 'multi_press_2': 2,
+            'multi_press_3': 3}.get(event_type, 0) }}
+      power_click: "{{ shifted and press == 1 }}"
+      # Stufe 1/2 (schnell/langsam aus); 0 = keine Stufe
+      stage: >-
+        {% set s = press - 1 if shifted else press %}
+        {{ s if s in [1, 2] else 0 }}
+      # Ziel für Stufen und Halten
+      func: "{{ sec_func if shifted else main_func }}"
+      lights: "{{ sec_lights if shifted else main_lights }}"
+      players: "{{ sec_players if shifted else main_players }}"
+      switches: "{{ [] if shifted else main_switches }}"
 
   - choose:
-      # ---------------------------------------- Einfach- und Doppelklick AN
-      - conditions: "{{ is_on and event_type in ['multi_press_1', 'multi_press_2'] }}"
+      # ------------------- Einfachklick mit Zweitziel: Hauptziel an / aus
+      - conditions: "{{ power_click and main_power | count > 0 }}"
+        sequence:
+          - if: "{{ is_on }}"
+            then:
+              - action: homeassistant.turn_on
+                continue_on_error: true
+                target:
+                  entity_id: "{{ main_power }}"
+            else:
+              - action: homeassistant.turn_off
+                continue_on_error: true
+                target:
+                  entity_id: "{{ main_power }}"
+
+      # ------------------------------------------------------ Stufe 1/2 AN
+      - conditions: "{{ is_on and stage > 0 }}"
         sequence:
           - choose:
               - conditions: "{{ func == 'light' and lights | count > 0 }}"
@@ -259,10 +340,10 @@ action:
                       entity_id: "{{ lights }}"
                     data:
                       brightness_pct: >-
-                        {{ (single_brightness if event_type == 'multi_press_1'
+                        {{ (single_brightness if stage == 1
                             else double_brightness) | int }}
                       color_temp_kelvin: >-
-                        {{ (single_kelvin if event_type == 'multi_press_1'
+                        {{ (single_kelvin if stage == 1
                             else double_kelvin) | int }}
                       transition: 0.5
               - conditions: "{{ func == 'media' and players | count > 0 }}"
@@ -271,9 +352,15 @@ action:
                     continue_on_error: true
                     target:
                       entity_id: "{{ players }}"
+              - conditions: "{{ func == 'switch' and switches | count > 0 }}"
+                sequence:
+                  - action: homeassistant.turn_on
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ switches }}"
 
-      # --------------------------------------- Einfach- und Doppelklick AUS
-      - conditions: "{{ not is_on and event_type in ['multi_press_1', 'multi_press_2'] }}"
+      # --------------------------------------------------- Stufe 1/2 AUS
+      - conditions: "{{ not is_on and stage > 0 }}"
         sequence:
           - choose:
               - conditions: "{{ func == 'light' and lights | count > 0 }}"
@@ -283,21 +370,19 @@ action:
                       entity_id: "{{ lights }}"
                     data:
                       transition: >-
-                        {{ (fast_off if event_type == 'multi_press_1'
-                            else slow_off) | float(0) }}
+                        {{ (fast_off if stage == 1 else slow_off) | float(0) }}
               - conditions: "{{ func == 'media' and players | count > 0 }}"
                 sequence:
                   - action: media_player.turn_off
                     continue_on_error: true
                     target:
                       entity_id: "{{ players }}"
-
-      # ------------------------------------------------------ Dreifachklick
-      - conditions: "{{ event_type == 'multi_press_3' }}"
-        sequence:
-          - if: "{{ is_on }}"
-            then: !input triple_action_on
-            else: !input triple_action_off
+              - conditions: "{{ func == 'switch' and switches | count > 0 }}"
+                sequence:
+                  - action: homeassistant.turn_off
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ switches }}"
 
       # ------------------------------------- Halten: Helligkeit / Lautstärke
       # Läuft, solange die Taste gehalten wird. Das Loslassen (long_release)
@@ -426,6 +511,14 @@ action:
                                 finished: "{{ level >= upper or level < 0.5 }}"
                             - delay: 0.25
 
+  # ----------------------------- Dreifachklick: frei belegbare Aktionen
+  # Laufen immer, mit Zweitziel zusätzlich zur Stufe 2.
+  - if: "{{ press == 3 }}"
+    then:
+      - if: "{{ is_on }}"
+        then: !input triple_action_on
+        else: !input triple_action_off
+
 # Neustart: jedes neue Ereignis (auch das Loslassen) beendet eine laufende
 # Dimm-Schleife sofort.
 mode: restart
@@ -433,6 +526,7 @@ max_exceeded: silent
 
 variables:
   target: !input target
+  secondary_target: !input secondary_target
   function: !input function
   single_brightness: !input single_brightness
   single_kelvin: !input single_kelvin
